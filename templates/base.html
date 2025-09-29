@@ -1,15 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Habit RPG{% endblock %}</title>
 
     {% load static %}
-    <link rel="stylesheet" href="{% static 'css/styles.css'%}">
+    <script src="https://cdn.tailwindcss.com"></script>
     {% block extra_head %}{% endblock %}
   </head>
-  {% block body %}
-  {% block content %}{% endblock %}
-  {% endblock %}
+  <body class="flex h-screen flex-col overflow-hidden">
+    <ribbon
+      class="top-0 right-0 left-0 flex h-[8.3dvh] items-center gap-4 border-b border-black bg-gray-100 px-4"
+    >
+      Head
+    </ribbon>
+    {% block content %}{% endblock %}
+  </body>
 </html>

@@ -1,0 +1,50 @@
+{
+  "name": "ma_wrou",
+  "version": "1.0.0",
+  "description": "Maturitätsarbeit 2025/26 Kantonsschule Uster FS Informatik",
+  "main": "index.js",
+  "dependencies": {
+    "baseline-browser-mapping": "^2.8.18",
+    "browserslist": "^4.26.3",
+    "caniuse-lite": "^1.0.30001751",
+    "electron-to-chromium": "^1.5.237",
+    "escalade": "^3.2.0",
+    "fraction.js": "^4.3.7",
+    "nanoid": "^3.3.11",
+    "node-releases": "^2.0.25",
+    "normalize-range": "^0.1.2",
+    "picocolors": "^1.1.1",
+    "postcss-value-parser": "^4.2.0",
+    "source-map-js": "^1.2.1",
+    "update-browserslist-db": "^1.1.3"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "eslint-plugin-tailwindcss": "^3.18.2",
+    "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.7.1",
+    "tailwindcss": "^4.1.14"
+  },
+  "scripts": {
+    "tailwind:init": "node ./node_modules/tailwindcss/lib/cli.js init -p",
+    "tailwind:build": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./dist/output.css --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rw-xzer/MA_WRou.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rw-xzer/MA_WRou/issues"
+  },
+  "homepage": "https://github.com/rw-xzer/MA_WRou#readme",
+  "prettier": {
+    "plugins": [
+      "prettier-plugin-tailwindcss"
+    ]
+  }
+}

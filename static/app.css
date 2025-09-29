@@ -1,0 +1,90 @@
+/* Avatar animations */
+.avatar {
+  transition: all 0.3s ease;
+}
+
+.avatar-idle {
+  animation: idle 2s ease-in-out infinite;
+}
+
+.avatar-studying {
+  animation: studying 1.5s ease-in-out infinite;
+}
+
+.avatar-hurt {
+  animation: hurt 0.5s ease-in-out;
+  filter: hue-rotate(0deg) saturate(1.5);
+}
+
+.avatar-celebrate {
+  animation: celebrate 1s ease-in-out;
+}
+
+@keyframes idle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes studying {
+  0%, 100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(2deg);
+  }
+}
+
+@keyframes hurt {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+@keyframes celebrate {
+  0%, 100% {
+    transform: scale(1) translateY(0);
+  }
+  25% {
+    transform: scale(1.1) translateY(-10px);
+  }
+  50% {
+    transform: scale(1.15) translateY(-15px);
+  }
+  75% {
+    transform: scale(1.1) translateY(-10px);
+  }
+}
+
+/* Modal styles */
+.modal {
+  backdrop-filter: blur(5px);
+}
+
+/* Scrollbar styles */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 8px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+

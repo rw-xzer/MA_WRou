@@ -1,5 +1,606 @@
-from django.shortcuts import render
-import templates
+from django.shortcuts import render, redirect
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.forms import AuthenticationForm
+from django.utils import timezone
+from django.db.models import Max
+from datetime import datetime, timedelta
+import json
+import random
 
+from .models import (
+    UserProfile,
+    Habit,
+    Task,
+    StudySession,
+    Tag,
+    HabitLog,
+    TaskLog,
+    StatSlot,
+    ShopItem,
+    UserPurchase,
+)
+
+def login_view(request):
+  """Login view"""
+  if request.user.is_authenticated:
+    return redirect('index')
+  
+  if request.method == 'POST':
+    form = AuthenticationForm(request, data=request.POST)
+    if form.is_valid():
+      username = form.cleaned_data.get('username')
+      password = form.cleaned_data.get('password')
+      user = authenticate(username=username, password=password)
+      if user is not None:
+        login(request, user)
+        return redirect('index')
+  else:
+    form = AuthenticationForm()
+  
+  return render(request, 'login.html', {'form': form})
+
+def logout_view(request):
+  """Logout view"""
+  logout(request)
+  return redirect('login')
+
+@login_required
 def index(request):
-  return render(request, 'index.html')
+  """Main dashboard view"""
+  return render (request, 'index.html')
+
+@login_required
+def stats_page(request):
+  """Monthly stat page"""
+  return render(request, 'stats.html')
+
+@login_required
+def shop_page(request):
+  """Shop page"""
+  return render(request, 'shop.html')
+
+# API Endpoints
+@login_required
+@require_http_methods(["GET"])
+def api_user_profile(request):
+  """Get user profile data"""
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  return JsonResponse({
+    'level': profile.level,
+    'xp': profile.xp,
+    'max_xp': profile.max_xp,
+    'hp': profile.hp,
+    'max_hp': profile.max_hp,
+    'coins': profile.coins,
+    'avatar': profile.avatar,
+    'avatar_state': profile.avatar_state,
+    })
+
+@login_required
+@require_http_methods(["GET"])
+def api_habits(request):
+  """Get user habits"""
+  filter_type = request.GET.get('filter', 'all')
+  habits = Habit.objects.filter(user=request.user)
+
+  if filter_type == 'weak':
+    habits = [h for h in habits if not h.strong()]
+  elif filter_type == 'strong':
+    habits = [h for h in habits if h.strong()]
+
+  habits_data = []
+  for habit in habits:
+    habits_data.append({
+      'id': habit.id,
+      'title': habit.title,
+      'details': habit.details,
+      'tags': [tag.name for tag in habit.tags.all()],
+      'diff': habit.diff,
+      'allow_pos': habit.allow_pos,
+      'allow_neg': habit.allow_neg,
+      'pos_count': habit.pos_count,
+      'neg_count': habit.neg_count,
+      'color': habit.get_color(),
+      'strong': habit.strong(),
+    })
+
+  return JsonResponse({'habits': habits_data})
+
+@login_required
+@require_http_methods(["GET"])
+def api_tasks(request):
+  """Get user tasks"""
+  filter_type = request.GET.get('filter', 'all')
+  tasks = Task.objects.filter(user=request.user)
+
+  if filter_type == 'scheduled':
+    tasks = tasks.filter(task_type='scheduled')
+  elif filter_type == 'dailies':
+    tasks = tasks.filter(task_type='daily')
+
+  tasks_data = []
+  for task in tasks:
+    tasks_data.append({
+    'id': task.id,
+    'title': task.title,
+    'details': task.details,
+    'tags': [tag.name for tag in task.tags.all()],
+    'diff': task.diff,
+    'task_type': task.task_type,
+    'due': task.due,
+    'completed': task.completed,
+    'streak': task.streak,
+    'color': task.get_color(),
+    'overdue': task.overdue(), 
+    })
+
+  return JsonResponse({'tasks': tasks_data})
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_create_habit(request):
+  """Create a new habit"""
+  data = json.loads(request.body)
+
+  habit = Habit.objects.create(
+    user=request.user,
+    title=data.get('title'),
+    details=data.get('details', ''),
+    diff=data.get('diff', 'trivial'),
+    allow_pos=data.get('allow_pos', True),
+    allow_neg=data.get('allow_neg', True),
+    reset_freq=data.get('reset_freq', 'never'),
+  )
+
+  tag_names = data.get('tags', [])
+  for tag_name in tag_names:
+    tag, _ = Tag.objects.get_or_create(name=tag_name)
+    habit.tags.add(tag)
+
+  return JsonResponse({'id': habit.id, 'success': True})
+
+@login_required
+@csrf_exempt
+@require_http_methods(["PUT"])
+def api_update_habit(request, habit_id):
+  """Update an existing habit"""
+  try:
+    habit = Habit.objects.get(id=habit_id, user=request.user)
+    data = json.loads(request.body)
+
+    habit.title = data.get('title', habit.title)
+    habit.details = data.get('details', habit.details)
+    habit.diff = data.get('diff', habit.diff)
+    habit.allow_pos = data.get('allow_pos', habit.allow_pos)
+    habit.allow_neg = data.get('allow_neg', habit.allow_neg)
+    habit.reset_freq = data.get('reset_freq', habit.reset_freq)
+    habit.save()
+
+    # Update tags
+    tag_names = data.get('tags', [])
+    habit.tags.clear()
+    for tag_name in tag_names:
+      tag, _ = Tag.objects.get_or_create(name=tag_name)
+      habit.tags.add(tag)
+
+    return JsonResponse({'id': habit.id, 'success': True})
+  except Habit.DoesNotExist:
+    return JsonResponse({'error': 'Habit not found'}, status=404)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def api_delete_habit(request, habit_id):
+  """Delete an existing habit"""
+  try:
+    habit = Habit.objects.get(id=habit_id, user=request.user)
+    habit.delete()
+    return JsonResponse({'success': True})
+  except Habit.DoesNotExist:
+    return JsonResponse({'error': 'Habit not found'}, status=404)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_create_task(request):
+  """Create a new task"""
+  data = json.loads(request.body)
+
+  due = None
+  if data.get('due_date'):
+    dt_str = data.get('due_date').replace('Z', '+00:00')
+    due = datetime.fromisoformat(dt_str)
+    if timezone.is_naive(due):
+      due = timezone.make_aware(due)
+
+  task = Task.objects.create(
+    user=request.user,
+    title=data.get('title'),
+    details=data.get('details', ''),
+    diff=data.get('diff', 'trivial'),
+    task_type=data.get('task_type', 'scheduled'),
+    due=due,
+  )
+
+  tag_names = data.get('tags', [])
+  for tag_name in tag_names:
+    tag, _ = Tag.objects.get_or_create(name=tag_name)
+    task.tags.add(tag)
+
+  return JsonResponse({'id': task.id, 'success': True})
+
+@login_required
+@csrf_exempt
+@require_http_methods(["PUT"])
+def api_update_task(request, task_id):
+  """Update an existing task"""
+  try:
+    task = Task.objects.get(id=task_id, user=request.user)
+    data = json.loads(request.body)
+
+    task.title = data.get('title', task.title)
+    task.details = data.get('details', task.details)
+    task.diff = data.get('diff', task.diff)
+    task.task_type = data.get('task_type', task.task_type)
+
+    # Update due date if provided
+    if 'due_date' in data and data.get('due_date'):
+      dt_str = data.get('due_date').replace('Z', '+00:00')
+      due = datetime.fromisoformat(dt_str)
+      if timezone.is_naive(due):
+        due = timezone.make_aware(due)
+      task.due = due
+    elif task.task_type == 'daily':
+      task.due = None
+
+    task.save()
+
+    # Update tags
+    tag_names = data.get('tags', [])
+    task.tags.clear()
+    for tag_name in tag_names:
+      tag, _ = Tag.objects.get_or_create(name=tag_name)
+      task.tags.add(tag)
+
+    return JsonResponse({'id': task.id, 'success': True})
+  except Task.DoesNotExist:
+    return JsonResponse({'error': 'Task not found'}, status=404)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def api_delete_task(request, task_id):
+  """Delete an existing task"""
+  try:
+    task = Task.objects.get(id=task_id, user=request.user)
+    task.delete()
+    return JsonResponse({'success': True})
+  except Task.DoesNotExist:
+    return JsonResponse({'error': 'Task not found'}, status=404)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_start_study_session(request):
+  """Start a study session"""
+  data = json.loads(request.body)
+
+  StudySession.objects.filter(user=request.user, active=True).update(active=False)
+
+  session = StudySession.objects.create(
+    user=request.user,
+    subject=data.get('subject', 'General'),
+  )
+
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  profile.avatar_state = 'studying'
+  profile.save()
+
+  return JsonResponse({'id': session.id, 'success': True})
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_stop_study_session(request):
+  """Stop active study session"""
+  session = StudySession.objects.filter(user=request.user, active=True).first()
+
+  if session:
+    duration = session.stop()
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile.avatar_state = 'idle'
+    profile.save()
+
+    return JsonResponse({'duration_minutes': duration, 'success': True})
+  
+  return JsonResponse({'error': 'No active study session found'}, status=400)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_complete_habit(request, habit_id):
+  """Complete a habit (positive/negative)"""
+  data = json.loads(request.body)
+  is_positive = data.get('positive', True)
+
+  try:
+    habit = Habit.objects.get(id=habit_id, user=request.user)
+
+    if is_positive and habit.allow_pos:
+      habit.incr_pos()
+      HabitLog.objects.create(habit=habit, positive=True)
+
+      profile, _ = UserProfile.objects.get_or_create(user=request.user)
+      xp = {'trivial': 5, 'easy': 10, 'medium': 20, 'hard': 40}[habit.diff]
+      profile.add_xp(xp)
+      coins = random.randint(0, 5)
+      profile.add_coins(coins)
+      profile.save()
+
+    elif not is_positive and habit.allow_neg:
+      habit.incr_neg()
+      HabitLog.objects.create(habit=habit, positive=False)
+
+      profile, _ = UserProfile.objects.get_or_create(user=request.user)
+      profile.lose_health(5)
+      profile.save()
+
+    return JsonResponse({'success': True})
+  except Habit.DoesNotExist:
+    return JsonResponse({'error': 'Habit not found'}, status=404)
+  
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_complete_task(request, task_id):
+  """Complete a task"""
+  try:
+    task = Task.objects.get(id=task_id, user=request.user)
+
+    if not task.completed:
+      task.complete()
+      TaskLog.objects.create(task=task)
+
+      profile, _ = UserProfile.objects.get_or_create(user=request.user)
+      xp = {'trivial': 5, 'easy': 10, 'medium': 20, 'hard': 40}[task.diff]
+      profile.add_xp(xp)
+      coins = random.randint(0, 5)
+      profile.add_coins(coins)
+      profile.save()
+
+      level_up = profile.xp >= profile.max_xp
+      if level_up:
+        profile.avatar_state = 'celebrating'
+        profile.save()
+      
+      return JsonResponse({
+        'success': True,
+        'level_up': level_up,
+        'xp_earned': xp,
+        'coins_earned': coins,
+      })
+    
+    return JsonResponse({'error': 'Task already completed'}, status=400)
+  except Task.DoesNotExist:
+    return JsonResponse({'error': 'Task not found'}, status=404)
+  
+@login_required
+@require_http_methods(["GET"])
+def api_check_dailies(request):
+  """Check and update daily task completion"""
+  today = timezone.now().date()
+  dailies = Task.objects.filter(user=request.user, task_type='daily', completed=False)
+
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  missed_dailies = 0
+
+  for daily in dailies:
+    if daily.last_completed is None or daily.last_completed < today:
+      profile.lose_health(5)
+      missed_dailies += 1
+
+  overdue = Task.objects.filter(
+    user=request.user,
+    task_type='scheduled',
+    completed=False,
+    due__lt=timezone.now()
+  )
+
+  for task in overdue:
+    days_overdue = (timezone.now() - task.due).days
+    profile.lose_health(min(days_overdue, 14))
+
+  profile.save()
+
+  return JsonResponse({
+    'missed_dailes': missed_dailies,
+    'overdue_tasks': overdue.count(),
+  })
+
+@login_required
+@require_http_methods(["GET"])
+def api_last_week_recap(request):
+  """Generate last week recap (placeholder)"""
+  prev_week = timezone.now() - timedelta(days=7)
+
+  habits_completed = HabitLog.objects.filter(
+    habit__user=request.user,
+    created_at__gte=prev_week
+  ).count()
+
+  tasks_completed = TaskLog.objects.filter(
+    task__user=request.user,
+    created_at__gte=prev_week
+  ).count()
+
+  study_sessions = StudySession.objects.filter(
+    user=request.user,
+    start_time__gte=prev_week,
+    active=False
+  )
+  total_study_hours = sum(s.duration_minutes or 0 for s in study_sessions) / 60
+
+  missed_dailies = Task.objects.filter(
+    user=request.user,
+    task_type='daily',
+    last_completed__lt=prev_week.date()
+  ).count()
+
+  recap_text = f"""Last week, you completed {habits_completed} habits and {tasks_completed} tasks.
+  You studied for {total_study_hours:.1f} hours and missed {missed_dailies} dailies.
+  Keep up the great work!"""
+
+  return JsonResponse({
+    'recap': recap_text,
+    'hours_studied': round(total_study_hours, 1),
+    'tasks_completed': tasks_completed,
+    'missed_dailies': missed_dailies,
+  })
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def api_stat_slots(request):
+  """Get or update user stat slots"""
+  if request.method == "GET":
+    slots = StatSlot.objects.filter(user=request.user)
+    slots_data = {}
+    for slot in slots:
+      slots_data[slot.slot_number] = slot.stat_type
+
+    return JsonResponse({'slots': slots_data})
+  
+  else:
+    data = json.loads(request.body)
+    slot_number = data.get('slot_number')
+    stat_type = data.get('stat_type')
+
+    slot, _ = StatSlot.objects.get_or_create(
+      user=request.user,
+      slot_number = slot_number
+    )
+    slot.stat_type = stat_type
+    slot.save()
+
+    return JsonResponse({'success': True})
+
+@login_required
+@require_http_methods(["GET"])
+def api_stat_value(request):
+  """Get value for specific stat type"""
+  stat_type = request.GET.get('type')
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+  if stat_type == 'hours_studied':
+    sessions = StudySession.objects.filter(user=request.user, active=False)
+    total_hours = sum(s.duration_minutes or 0 for s in sessions) / 60
+    return JsonResponse({'value': round(total_hours, 1)})
+  
+  elif stat_type == 'tasks_completed':
+    count = Task.objects.filter(user=request.user, completed=True).count()
+    return JsonResponse({'value': count})
+  
+  elif stat_type == 'habits_completed':
+    count = HabitLog.objects.filter(habit__user=request.user, positive=True).count()
+    return JsonResponse({'value': count})
+  
+  elif stat_type == 'current_streak':
+    max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(
+      max_streak=Max('streak')
+    )['max_streak'] or 0
+    return JsonResponse({'value': max_streak})
+  
+  elif stat_type == 'longest_streak':
+    # TODO: Track longest streak separately
+    return JsonResponse({'value': 0})
+  
+  elif stat_type == 'coins_earned':
+    return JsonResponse({'value': profile.coins})
+  
+  elif stat_type == 'level':
+    return JsonResponse({'value': profile.level})
+  
+  return JsonResponse({'value': 0})
+
+@login_required
+@require_http_methods(["GET"])
+def api_shop_items(request):
+  """Get shop items"""
+  items = ShopItem.objects.filter(active=True)
+  items_data = []
+  for item in items:
+    items_data.append({
+      'id': item.id,
+      'name': item.name,
+      'description': item.description,
+      'item_type': item.item_type,
+      'price': item.price,
+      'image_url': item.image_url,
+    })
+
+  return JsonResponse({'items': items_data})
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_purchase_item(request):
+  """Purchase item from shop"""
+  data = json.loads(request.body)
+  item_id = data.get('item_id')
+
+  try:
+    item = ShopItem.objects.get(id=item_id, active=True)
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+    if profile.coins >= item.price:
+      profile.coins -= item.price
+      profile.save()
+
+      UserPurchase.objects.get_or_create(user=request.user, item=item)
+
+      return JsonResponse({'success': True, 'coins_left': profile.coins})
+    else:
+      return JsonResponse({'error': 'Insufficient coins'}, status=400)
+    
+  except ShopItem.DoesNotExist:
+    return JsonResponse({'error': 'Item not found'}, status=404)
+  
+@login_required
+@require_http_methods(["GET"])
+def api_monthly_stats(request):
+  """Get monthly study stats (subject, day)"""
+  now = timezone.now()
+  start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+  
+  sessions = StudySession.objects.filter(
+    user=request.user,
+    start_time__gte=start_of_month,
+    active=False
+  )
+
+  stats_by_subject = {}
+  stats_by_day = {}
+
+  for session in sessions:
+    subject = session.subject
+    day = session.start_time.date()
+    duration = (session.duration_minutes or 0) / 60
+
+    if subject not in stats_by_subject:
+      stats_by_subject[subject] = 0
+    stats_by_subject[subject] += duration
+
+    day_str = day.isoformat()
+    if day_str not in stats_by_day:
+      stats_by_day[day_str] = 0
+    stats_by_day[day_str] += duration
+
+  return JsonResponse({
+    'by_subject': stats_by_subject,
+    'by_day': stats_by_day,
+  })

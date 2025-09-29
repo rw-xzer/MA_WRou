@@ -10,11 +10,19 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body class="flex h-screen flex-col overflow-hidden">
-    <ribbon
-      class="top-0 right-0 left-0 flex h-[8.3dvh] items-center gap-4 border-b border-black bg-gray-100 px-4"
-    >
-      Head
-    </ribbon>
+    {% if user.is_authenticated %}
+    <nav class="top-0 right-0 left-0 flex h-[8.3dvh] items-center justify-between gap-4 border-b border-black bg-gray-100 px-4">
+      <div class="flex gap-4">
+        <a href="{% url 'index' %}" class="font-bold text-lg">Dashboard</a>
+        <a href="{% url 'stats' %}" class="text-gray-700 hover:text-black">Study Stats</a>
+        <a href="{% url 'shop' %}" class="text-gray-700 hover:text-black">Shop</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-gray-700">Hello, {{ user.username }}</span>
+        <a href="{% url 'logout' %}" class="text-sm text-gray-700 hover:text-black">Logout</a>
+      </div>
+    </nav>
+    {% endif %}
     {% block content %}{% endblock %}
   </body>
 </html>

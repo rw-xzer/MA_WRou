@@ -1,0 +1,104 @@
+##################################
+# Python
+##################################
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*$py.class
+
+##################################
+# Django
+##################################
+*.log
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+/media/
+staticfiles/
+static_collected/
+
+##################################
+# Node / NPM
+##################################
+node_modules/
+
+##################################
+# Virtual Environments
+##################################
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+*.env
+
+##################################
+# IDE / Editor files
+##################################
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+##################################
+# OS files
+##################################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+##################################
+# Testing / Coverage
+##################################
+.coverage
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.hypothesis/
+coverage/
+*.cover
+
+##################################
+# Jupyter
+##################################
+.ipynb_checkpoints/
+
+##################################
+# Misc tools
+##################################
+.python-version
+.pyre/
+.pytype/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+##################################
+# Build / Dist
+##################################
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+sdist/
+wheels/
+share/python-wheels/
+cython_debug/
+docs/_build/
+target/

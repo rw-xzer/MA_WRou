@@ -1,1 +1,50 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
+/* Custom styles */
+.section {
+  max-width: auto flex;
+  margin: 0 auto;
+  border: lightgray 3px solid;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-main-wrapper{
+  width: 100%;
+  border: none;
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+}
+
+.s2{
+  width: 61.8vw;
+  margin: 0;
+  justify-content: left !important;
+}
+
+.s2d{
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+}
+
+.s2d1{
+  width: 50rem;
+  margin: 0;
+  justify-content: left !important;
+}
+
+.s2d2{
+  width: 50rem;
+  margin: 0;
+  justify-content: right !important;
+}
+
+.s3{
+  width: 38.2vw;
+  margin: 0;
+  justify-content: right !important;
+}

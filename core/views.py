@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils import timezone
-from django.db.models import Max
+from django.db.models import Max, Count, Q
 from datetime import datetime, timedelta
 import json
 import random
@@ -426,22 +426,23 @@ def api_check_dailies(request):
 @login_required
 @require_http_methods(["GET"])
 def api_last_week_recap(request):
-  """Generate last week recap (placeholder)"""
+  """Generate last week recap with standout stats algorithm"""
   prev_week = timezone.now() - timedelta(days=7)
+  prev_week_start = prev_week.replace(hour=0, minute=0, second=0, microsecond=0)
 
   habits_completed = HabitLog.objects.filter(
     habit__user=request.user,
-    created_at__gte=prev_week
+    created_at__gte=prev_week_start
   ).count()
 
   tasks_completed = TaskLog.objects.filter(
     task__user=request.user,
-    created_at__gte=prev_week
+    created_at__gte=prev_week_start
   ).count()
 
   study_sessions = StudySession.objects.filter(
     user=request.user,
-    start_time__gte=prev_week,
+    start_time__gte=prev_week_start,
     active=False
   )
   total_study_hours = sum(s.duration_minutes or 0 for s in study_sessions) / 60
@@ -449,18 +450,87 @@ def api_last_week_recap(request):
   missed_dailies = Task.objects.filter(
     user=request.user,
     task_type='daily',
-    last_completed__lt=prev_week.date()
+  ).exclude(
+    last_completed__gte=prev_week_start
   ).count()
 
-  recap_text = f"""Last week, you completed {habits_completed} habits and {tasks_completed} tasks.
-  You studied for {total_study_hours:.1f} hours and missed {missed_dailies} dailies.
-  Keep up the great work!"""
+  # Find standout stats
+  standout_items = []
+
+  # Highest streak in dailies
+  highest_streak_task = Task.objects.filter(
+    user=request.user,
+    task_type='daily',
+    streak__gt=0
+  ).order_by('-streak').first()
+  if highest_streak_task and highest_streak_task.streak >= 5:
+    standout_items.append({
+      'type': 'streak',
+      'title': f"{highest_streak_task.title}",
+      'description': f"{highest_streak_task.streak} day streak!",
+      'icon': 'flame',
+      'score': highest_streak_task.streak * 10
+    })
+
+  # Most completed habit
+  habit_logs = HabitLog.objects.filter(
+    habit__user=request.user,
+    created_at__gte=prev_week_start,
+    positive=True
+  ).values('habit__id', 'habit__title').annotate(count=Count('id')).order_by('-count')
+
+  if habit_logs and habit_logs[0]['count'] >= 5:
+    top_habit = habit_logs[0]
+    standout_items.append({
+      'type': 'habit',
+      'title':f"{top_habit['habit__title']}",
+      'description': f"Completed {top_habit['count']} times",
+      'icon': 'thumbs-up',
+      'score': top_habit['count'] * 5
+    })
+
+  # Longest study session
+  longest_session = study_sessions.order_by('-duration_minutes').first()
+  if longest_session and longest_session.duration_minutes and longest_session.duration_minutes >= 60:
+    standout_items.append({
+      'type': 'study',
+      'title': longest_session.subject,
+      'description': f"{hours:.1f} hour session",
+      'icon': 'clock',
+      'score': longest_session.duration_minutes
+    })
+
+  # Best habit (highest positive to negative ratio)
+  habits = Habit.objects.filter(user=request.user)
+  for habit in habits:
+    total = habit.pos_count + habit.neg_count
+    if total >= 5: # Minimum activity
+      ratio = habit.pos_count /total if total > 0 else 0
+      if ratio >= 0.8:
+        standout_items.append({
+          'type': 'habit_ratio',
+          'title': habit.title,
+          'description': f"{int(ratio * 100)}% positive",
+          'icon': 'star',
+          'score': int(ratio * 100)
+        })
+        break
+
+  # Sort score and take top 3-5
+  standout_items.sort(key=lambda x: x['score'], reverse=True)
+  standout_items = standout_items[:5]
+
+  if standout_items:
+    recap_text = "Last week highlights:"
+  else:
+    recap_text = "No standout stats last week. Let's aim higher this week!"
 
   return JsonResponse({
     'recap': recap_text,
     'hours_studied': round(total_study_hours, 1),
     'tasks_completed': tasks_completed,
     'missed_dailies': missed_dailies,
+    'items': standout_items,
   })
 
 @login_required

@@ -3,7 +3,7 @@ from django.db import models
 # Create your models here.
 from django.contrib.auth.models import User
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 import json
 
 class UserProfile(models.Model):
@@ -117,13 +117,13 @@ class Habit(models.Model):
     return self.pos_count > self.neg_count * 2
   
   def incr_neg(self):
-    """Increment positive counter"""
-    self.pos_count += 1
+    """Increment negative counter"""
+    self.neg_count += 1
     self.save()
 
   def incr_pos(self):
-    """Increment negative counter"""
-    self.neg_count += 1
+    """Increment positive counter"""
+    self.pos_count += 1
     self.save()
 
   def reset_counters(self):
@@ -209,9 +209,11 @@ class Task(models.Model):
     self.completed_at = timezone.now()
 
     if self.task_type == 'daily':
-      today = timezone.now().date()
+      now = timezone.now()
+      today = now.date()
       if self.last_completed:
-        yesterday = self.last_completed + timedelta(days=1)
+        last_completed_date = self.last_completed.date() if isinstance(self.last_completed, timezone.datetime) else self.last_completed = last_completed_date + timedelta(days=1)
+        yesterday = last_completed_date + timedelta(days=1)
         if today == yesterday:
           self.streak += 1
         elif today > yesterday:
@@ -219,7 +221,7 @@ class Task(models.Model):
       else:
         self.streak = 1
 
-      self.last_completed = today
+      self.last_completed = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
     
     self.save()
 

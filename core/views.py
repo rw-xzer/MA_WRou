@@ -492,6 +492,7 @@ def api_last_week_recap(request):
   # Longest study session
   longest_session = study_sessions.order_by('-duration_minutes').first()
   if longest_session and longest_session.duration_minutes and longest_session.duration_minutes >= 60:
+    hours = longest_session.duration_minutes / 60
     standout_items.append({
       'type': 'study',
       'title': longest_session.subject,

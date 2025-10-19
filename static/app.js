@@ -359,27 +359,33 @@ function updateRecap(data) {
   if (!container) return;
   
   container.innerHTML = '';
+
+  const statBoxesContainer = document.getElementById('recapStatBoxes');
   
-  // Update metric cards
+  // Update recap cards
   const hoursCard = document.getElementById('hoursCard');
   const tasksCard = document.getElementById('tasksCard');
   const dailiesCard = document.getElementById('dailiesCard');
   
-  if (hoursCard && data.hours_studied !== undefined) {
-    hoursCard.textContent = `${data.hours_studied} hours studied last week`;
-  }
-  if (tasksCard && data.tasks_completed !== undefined) {
-    tasksCard.textContent = `${data.tasks_completed} Tasks completed`;
-  }
-  if (dailiesCard && data.missed_dailies !== undefined) {
-    dailiesCard.textContent = `Missed ${data.missed_dailies} Dailies`;
-  }
-  
   // Add horizontally scrollable recap items if available
   if (data.items && data.items.length > 0) {
+    if (statBoxesContainer) {
+      statBoxesContainer.style.display = 'flex';
+    }
+
+    if (hoursCard && data.hours_studied !== undefined) {
+      hoursCard.textContent = `${data.hours_studied} hours studied last week`;
+    }
+    if (tasksCard && data.hours_studied !== undefined) {
+      tasksCard.textContent = `${data.tasks_completed} tasks completed`;
+    }
+    if (dailiesCard && data.missed_dailies !== undefined) {
+      dailiesCard.textContent = `Missed ${data.missed_dailies} dailies`;
+    }
+
     const recapText = document.getElementById('recapText');
     if (recapText) {
-      recapText.textContent = 'Standout achievements:';
+      recapText.textContent = data.recap || 'Standout achievements:';
     }
     
     data.items.forEach(item => {
@@ -404,6 +410,10 @@ function updateRecap(data) {
       container.appendChild(card);
     });
   } else {
+    if (statBoxesContainer) {
+      statBoxesContainer.style.display = 'none';
+    }
+
     const recapText = document.getElementById('recapText');
     if (recapText && data.recap) {
       recapText.textContent = data.recap;

@@ -212,7 +212,7 @@ class Task(models.Model):
       now = timezone.now()
       today = now.date()
       if self.last_completed:
-        last_completed_date = self.last_completed.date() if isinstance(self.last_completed, timezone.datetime) else self.last_completed = last_completed_date + timedelta(days=1)
+        last_completed_date = self.last_completed.date() if isinstance(self.last_completed, timezone.datetime) else self.last_completed
         yesterday = last_completed_date + timedelta(days=1)
         if today == yesterday:
           self.streak += 1

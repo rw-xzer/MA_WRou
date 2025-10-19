@@ -100,17 +100,17 @@ class Habit(models.Model):
     
     ratio = self.pos_count / total if total > 0 else 0
 
-    # Red = negative to blue = positive gradient
     # Red: rgb (180, 40, 40), Blue: rgb (35, 150, 180)
     if ratio == 0:
       return '#b42828'
-    elif ratio == 1:
-      return '#2396b4'
+    elif ratio < 0.25:
+      return '#c54028'
+    elif ratio < 0.5:
+      return '#d2642d'
+    elif ratio < 0.75:
+      return "#44b8c7"
     else:
-      red = int(180 - (180 - 35) * ratio)
-      green = int(40 + (150 - 40) * ratio)
-      blue = int(180 + (180 - 40) * ratio)
-      return f'#{red:02X}{green:02X}{blue:02X}'
+      return '#2396b4'
     
   def strong(self):
     """Check if habit is strong"""
@@ -196,12 +196,16 @@ class Task(models.Model):
       elif self.streak >= 15:
         return '#2396b4'
       else:
-        # Orange to blue gradient
+        # Orange to blue
         ratio = min(self.streak / 15, 1.0)
-        red = int(210 - (210 - 35) * ratio)
-        green = int(100 + (150 - 100) * ratio)
-        blue = int(45 + (180 - 45) * ratio)
-        return f'#{red:02X}{green:02X}{blue:02X}'
+        if ratio < 0.25:
+          return '#d2642d'
+        elif ratio < 0.5:
+          return '#ff9800'
+        elif ratio < 0.75:
+          return '#44b8c7'
+        else:
+          return '#2396b4'
       
   def complete(self):
     """Mark task as complete"""

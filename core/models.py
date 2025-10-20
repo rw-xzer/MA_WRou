@@ -18,6 +18,15 @@ class UserProfile(models.Model):
   avatar = models.CharField(max_length=100, default='default_avatar.png')
   avatar_state = models.CharField(max_length=20, default='idle')
 
+  # All time stats
+  all_time_hours_studied = models.FloatField(default=0.0)
+  all_time_tasks_completed = models.IntegerField(default=0)
+  all_time_habits_completed = models.IntegerField(default=0)
+  longest_daily_streak = models.IntegerField(default=0)
+  all_time_coins_earned = models.IntegerField(default=0)
+  highest_level_ever = models.IntegerField(default=1)
+
+
   def calculate_xp_for_lvl(self):
     """Calculate xp needed for next level"""
     return int(((self.level - 1) + self.level) * 30)
@@ -33,6 +42,10 @@ class UserProfile(models.Model):
 
       self.hp = self.max_hp
       self.coins += 10
+      self.all_time_coins_earned += 10
+
+      if self.level > self.highest_level_ever:
+        self.highest_level_ever = self.level
 
       return True # Level up occurred
     return False
@@ -52,6 +65,7 @@ class UserProfile(models.Model):
   def add_coins(self, amount):
     """Add coins (0-5 for tasks/habits, 10 for lvl up)"""
     self.coins += amount
+    self.all_time_coins_earned += amount
 
 
 class Tag(models.Model):

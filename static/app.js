@@ -821,10 +821,40 @@ async function updateStatSlot(slotNum, statType) {
 
     if (response.ok) {
       closeModal('statSlotModal');
+      await loadStatValue(slotNum, statType);
       loadStatSlots();
     }
   } catch (error) {
     console.error('Error updating stat slot:', error);
+  }
+}
+
+async function loadStatValue(slotNum, statType) {
+  try {
+    const valueResponse = await fetch(`${API_BASE}/api/stats/value/?type=${statType}`);
+    const valueData = await valueResponse.json();
+
+    const slot = document.getElementById(`statSlot${slotNum}`);
+    if (slot) {
+      const valueEl = slot.querySelector('.stat-value');
+      const labelEl = slot.querySelector('.stat-label');
+
+      if (valueEl) valueEl.textContent = valueData.value;
+      if (labelEl) {
+        const labels = {
+          'hours_studied': 'hours studied',
+          'tasks_completed': 'tasks completed',
+          'habits_completed': 'habits completed',
+          'current_streak': 'current streak',
+          'longest_streak': 'longest streak',
+          'coins_earned': 'coins earned',
+          'level': 'level',
+        };
+        labelEl.textContent = labels[statType] || '';
+      }
+    }
+  } catch (error) {
+    console.error('Error loading stat value:', error);
   }
 }
 

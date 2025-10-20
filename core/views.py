@@ -315,6 +315,9 @@ def api_stop_study_session(request):
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     profile.avatar_state = 'idle'
+    if duration:
+      hours = duration / 60.0
+      profile.all_time_hours_studied += hours
     profile.save()
 
     return JsonResponse({'duration_minutes': duration, 'success': True})
@@ -341,6 +344,7 @@ def api_complete_habit(request, habit_id):
       profile.add_xp(xp)
       coins = random.randint(0, 5)
       profile.add_coins(coins)
+      profile.all_time_habits_completed += 1
       profile.save()
 
     elif not is_positive and habit.allow_neg:
@@ -372,6 +376,11 @@ def api_complete_task(request, task_id):
       profile.add_xp(xp)
       coins = random.randint(0, 5)
       profile.add_coins(coins)
+      profile.all_time_tasks_completed += 1
+
+      # Update longest daily streak
+      if task.task_type == 'daily' and task.streak > profile.longest_daily_streak:
+        profile.longest_daily_streak = task.streak
       profile.save()
 
       level_up = profile.xp >= profile.max_xp
@@ -568,17 +577,13 @@ def api_stat_value(request):
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
   if stat_type == 'hours_studied':
-    sessions = StudySession.objects.filter(user=request.user, active=False)
-    total_hours = sum(s.duration_minutes or 0 for s in sessions) / 60
-    return JsonResponse({'value': round(total_hours, 1)})
+    return JsonResponse({'value': round(profile.all_time_hours_studied, 1)})
   
   elif stat_type == 'tasks_completed':
-    count = Task.objects.filter(user=request.user, completed=True).count()
-    return JsonResponse({'value': count})
+    return JsonResponse({'value': profile.all_time_tasks_completed})
   
   elif stat_type == 'habits_completed':
-    count = HabitLog.objects.filter(habit__user=request.user, positive=True).count()
-    return JsonResponse({'value': count})
+    return JsonResponse({'value': profile.all_time_habits_completed})
   
   elif stat_type == 'current_streak':
     max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(
@@ -587,14 +592,13 @@ def api_stat_value(request):
     return JsonResponse({'value': max_streak})
   
   elif stat_type == 'longest_streak':
-    # TODO: Track longest streak separately
-    return JsonResponse({'value': 0})
+    return JsonResponse({'value': profile.longest_daily_streak})
   
   elif stat_type == 'coins_earned':
-    return JsonResponse({'value': profile.coins})
+    return JsonResponse({'value': profile.all_time_coins_earned})
   
   elif stat_type == 'level':
-    return JsonResponse({'value': profile.level})
+    return JsonResponse({'value': profile.highest_level_ever})
   
   return JsonResponse({'value': 0})
 

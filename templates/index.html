@@ -5,7 +5,7 @@
 <main class="flex">
   <!-- Left Main Section -->
   <section
-    class="relative left-0 flex h-[91.7dvh] w-[61.8vw] flex-col divide-y divide-black border-r border-black bg-gray-100"
+    class="relative left-0 flex h-[91.7dvh] w-[61.8vw] flex-col bg-gray-50"
   >
     <!-- Last Week Recap Section -->
     <section class="flex flex-col bg-inherit px-4 py-4">
@@ -106,7 +106,7 @@
 
     <!-- Search and Action Bar -->
     <section
-      class="flex h-[7.6dvh] items-center justify-center bg-inherit px-4"
+      class="flex h-[7.6dvh] items-center justify-center bg-inherit px-4 border-b border-gray-200"
     >
       <div class="flex w-full items-center gap-4">
         <input
@@ -115,40 +115,52 @@
           placeholder="Search..."
           class="flex-1 rounded-xl border border-black bg-gray-100 px-4 py-2"
         />
-        <button
-          id="tagsIcon"
-          class="flex items-center gap-2 rounded-xl border border-black bg-gray-100 px-4 py-2"
-        >
-          <svg
-            xmlns="http://www.23.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-            stroke="currentColor"
-            class="h-5 w-5"
+        <div class="relative">
+          <button
+            id="tagsIcon"
+            class="flex items-center gap-2 rounded-xl border border-black bg-gray-100 px-4 py-2"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
-            />
-          </svg>
-          Tags
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-            stroke="currentColor"
-            class="h-4 w-4"
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="h-5 w-5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
+              />
+            </svg>
+            Tags
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="h-4 w-4"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="m19.5 8.25-7.5 7.5-7.5-7.5"
+              />
+            </svg>
+          </button>
+          <div
+            id="tagsDropdown"
+            class="absolute right-0 z-50 mt-2 hidden w-64 rounded-lg border border-black bg-white shadow-lg"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="m19.5 8.25-7.5 7.5-7.5-7.5"
-            />
-          </svg>
-        </button>
+            <div class="p-2">
+              <div id="tagsList">
+                <!-- Tags will be dynamically inserted here -->
+              </div>
+            </div>
+          </div>
+        </div>
         <button
           id="addTaskBtn"
           class="flex items-center gap-2 rounded-xl border border-black bg-blue-500 px-4 py-2 text-white"
@@ -176,7 +188,7 @@
     <section class="flex flex-1 overflow-hidden">
       <!-- Habits Section -->
       <section
-        class="flex w-1/2 flex-col border-r border-black bg-inherit px-4 py-4"
+        class="flex w-1/2 flex-col border-r border-gray-200 bg-inherit px-4 py-4"
       >
         <div class="mb-4 flex items-center justify-between">
           <h2 class="text-xl font-bold">Habits</h2>
@@ -238,11 +250,11 @@
 
   <!-- Right Sidebar (User Profile and Stats) -->
   <section
-    class="absolute top-[8.3dvh] right-0 flex h-[91.7dvh] w-[38.2vw] flex-col divide-y divide-black bg-gray-100"
+    class="absolute top-[8.3dvh] right-0 flex h-[91.7dvh] w-[38.2vw] flex-col bg-gray-50"
   >
     <!-- Avatar Section -->
     <section
-      class="flex h-[56.6dvh] flex-col items-center justify-center bg-inherit px-4 py-8"
+      class="flex h-[56.6dvh] flex-col items-center justify-center bg-inherit px-4 py-8 border-b border-gray-200"
     >
       <div
         id="avatar"
@@ -267,7 +279,7 @@
 
     <!-- Health/XP Bars -->
     <section
-      class="flex h-[11.2dvh] flex-col justify-center bg-inherit px-4 py-4"
+      class="flex h-[11.2dvh] flex-col justify-center bg-inherit px-4 py-4 border-b border-gray-200"
     >
       <div class="mb-3 flex items-center gap-2">
         <svg
@@ -470,15 +482,12 @@
       </div>
 
       <div class="mb-4">
-        <label for="habitTags" class="mb-1 block text-sm font-medium"
+        <label for="habitTagsContainer" class="mb-1 block text-sm font-medium"
           >Tags</label
         >
-        <input
-          type="text"
-          id="habitTags"
-          class="w-full rounded border border-black px-3 py-2"
-          placeholder="tag1, tag2"
-        />
+        <div id="habitTagsContainer" class="max-h-32 overflow-y-auto">
+          <!-- Tags will be added here dynamically -->
+        </div>
       </div>
 
       <div class="flex gap-2">
@@ -583,15 +592,12 @@
       </div>
 
       <div class="mb-4">
-        <label for="taskTags" class="mb-1 block text-sm font-medium"
+        <label for="taskTagsContainer" class="mb-1 block text-sm font-medium"
           >Tags</label
         >
-        <input
-          type="text"
-          id="taskTags"
-          class="w-full rounded border border-black px-3 py-2"
-          placeholder="tag1, tag2"
-        />
+        <div id="taskTagsContainer" class="max-h-32 overflow-y-auto">
+          <!-- Tags will be added here dynamically -->
+        </div>
       </div>
       <div class="flex gap-2">
         <button
@@ -744,11 +750,9 @@
 <script>
   // Additional form handlers
   function createHabitFromForm() {
-    const tags = document
-      .getElementById("habitTags")
-      .value.split(",")
-      .map((t) => t.trim())
-      .filter((t) => t);
+    const tags = Array.from(
+      document.querySelectorAll(".habit-tag-checkbox:checked"),
+    ).map((checkbox) => checkbox.dataset.tag);
     createHabit({
       title: document.getElementById("habitTitle").value,
       details: document.getElementById("habitDetails").value,
@@ -761,11 +765,9 @@
   }
 
   function createTaskFromForm() {
-    const tags = document
-      .getElementById("taskTags")
-      .value.split(",")
-      .map((t) => t.trim())
-      .filter((t) => t);
+    const tags = Array.from(
+      document.querySelectorAll(".task-tag-checkbox:checked"),
+    ).map((checkbox) => checkbox.dataset.tag);
     const taskType = document.getElementById("taskType").value;
     let dueDate = null;
 

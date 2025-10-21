@@ -85,7 +85,19 @@ def api_user_profile(request):
 def api_habits(request):
   """Get user habits"""
   filter_type = request.GET.get('filter', 'all')
+  # 
+  search_query = request.GET.get('search', '').strip()
+  tag_filter = request.GET.get('tag', '').strip()
+  
   habits = Habit.objects.filter(user=request.user)
+
+  # Apply search filter
+  if search_query:
+    habits = habits.filter(Q(title__icontains=search_query) | Q(details__icontains=search_query))
+
+  # Apply tag filter
+  if tag_filter:
+    habits = habits.filter(tags__name=tag_filter).distinct()
 
   if filter_type == 'weak':
     habits = [h for h in habits if not h.strong()]
@@ -115,7 +127,18 @@ def api_habits(request):
 def api_tasks(request):
   """Get user tasks"""
   filter_type = request.GET.get('filter', 'all')
+  search_query = request.GET.get('search', '').strip()
+  tag_filter = request.GET.get('tag', '').strip()
+
   tasks = Task.objects.filter(user=request.user)
+
+  # Apply search filter
+  if search_query:
+    tasks = tasks.filter(Q(title__icontains=search_query) | Q(details__icontains=search_query))
+
+  # Apply tag filter
+  if tag_filter:
+    tasks = tasks.filter(tags__name=tag_filter).distinct()
 
   if filter_type == 'scheduled':
     tasks = tasks.filter(task_type='scheduled')
@@ -601,6 +624,28 @@ def api_stat_value(request):
     return JsonResponse({'value': profile.highest_level_ever})
   
   return JsonResponse({'value': 0})
+
+@login_required
+@require_http_methods(["GET"])
+def api_tags(request):
+  """Get all available tags and ensure default tags by user exist"""
+  default_tags = ["Work", "Health", "Creativity", "Study", "Exercise", "Hobby", "Chores"]
+
+  for tag_name in default_tags:
+    Tag.objects.get_or_create(name=tag_name)
+
+  user_habit_tags = Tag.objects.filter(habit__user=request.user).distinct()
+  user_task_tags = Tag.objects.filter(task__user=request.user).distinct()
+  user_tags = (user_habit_tags | user_task_tags).distinct()
+
+  default_tag_names = set(default_tags)
+
+  user_tag_names = set([tag.name for tag in user_tags])
+
+  all_tag_names = list(default_tag_names | user_tag_names)
+  all_tag_names.sort()
+
+  return JsonResponse({'tags': all_tag_names})
 
 @login_required
 @require_http_methods(["GET"])

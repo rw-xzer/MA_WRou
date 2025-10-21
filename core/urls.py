@@ -27,6 +27,7 @@ urlpatterns = [
   path("api/recap/", views.api_last_week_recap, name="api_recap"),
   path("api/stats/slots/", views.api_stat_slots, name="api_stat_slots"),
   path("api/stats/value/", views.api_stat_value, name="api_stat_value"),
+  path("api/tags/", views.api_tags, name="api_tags"),
   path("api/shop/purchase/", views.api_purchase_item, name="api_purchase_item"),
   path("api/shop/items/", views.api_shop_items, name="api_shop_items"),
   path("api/stats/monthly/", views.api_monthly_stats, name="api_monthly_stats"),

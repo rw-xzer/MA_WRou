@@ -10,10 +10,14 @@ let tasks = [];
 let activeStudySession = null;
 let habitFilter = 'all';
 let taskFilter = 'all';
+let searchQuery = '';
+let selectedTags = [];
+let allTags = [];
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   loadUserProfile();
+  loadTags();
   loadHabits();
   loadTasks();
   loadRecap();
@@ -53,6 +57,47 @@ function setupEventListeners() {
       showStatSlotModal(parseInt(slot.dataset.slot));
     });
   });
+
+  // Search input
+  const searchInput = document.getElementById('search');
+  if (searchInput) {
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        searchQuery = e.target.value.trim();
+        loadHabits();
+        loadTasks();
+      }, 300);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(searchTimeout);
+        searchQuery = e.target.value.trim();
+        loadHabits();
+        loadTasks();
+      }
+    });
+  } else {
+    console.error('Search input element not found');
+  }
+
+  // Tags dropdown
+  const tagsIcon = document.getElementById('tagsIcon');
+  const tagsDropdown = document.getElementById('tagsDropdown');
+  if (tagsIcon && tagsDropdown) {
+    tagsIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tagsDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!tagsIcon.contains(e.target) && !tagsDropdown.contains(e.target)) {
+        tagsDropdown.classList.add('hidden');
+      }
+    });
+  }
 }
 
 // Load user profile
@@ -105,10 +150,227 @@ function updateAvatar(state) {
   avatar.className = `avatar avatar-${state}`;
 }
 
+// Load tags
+async function loadTags() {
+  try {
+    const response = await fetch(`${API_BASE}/api/tags/`);
+    const data = await response.json();
+    const seen = new Set();
+    allTags = data.tags.filter(tag => {
+      const normalized = tag.toLowerCase().trim();
+      if (seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
+    allTags.sort();
+    renderTagsDropdown();
+    renderTagCheckboxes();
+  } catch (error) {
+    console.error('Error loading tags:', error);
+  }
+}
+
+// Render tags dropdown
+function renderTagsDropdown() {
+  const tagsList = document.getElementById('tagsList');
+  if (!tagsList) return;
+
+  tagsList.innerHTML = '';
+
+  const allTagsBtn = document.createElement('button');
+  allTagsBtn.className = 'w-full text-left px-3 py-2 rounded hover:bg-gray-100 font-semibold mb-2';
+  allTagsBtn.textContent = 'All Tags';
+  allTagsBtn.addEventListener('click', () => {
+    selectedTags = [];
+    loadHabits();
+    loadTasks();
+  });
+  tagsList.appendChild(allTagsBtn);
+
+  const tagsGrid = document.createElement('div');
+  tagsGrid.className = 'grid grid-cols-2 gap-2';
+
+  allTags.forEach(tag => {
+    const tagItem = document.createElement('label');
+    tagItem.className = 'flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 cursor-pointer';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = tag;
+    checkbox.className = 'rounded';
+    checkbox.checked = selectedTags.includes(tag);
+    checkbox.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        if (!selectedTags.includes(tag)) {
+          selectedTags.push(tag);
+        }
+      } else {
+        selectedTags = selectedTags.filter(t => t !== tag);
+      }
+      loadHabits();
+      loadTasks();
+    });
+
+    const tagText = document.createElement('span');
+    tagText.className = 'text-sm';
+    tagText.textContent = tag;
+
+    tagItem.appendChild(checkbox);
+    tagItem.appendChild(tagText);
+    tagsGrid.appendChild(tagItem);
+  });
+
+  tagsList.appendChild(tagsGrid);
+}
+
+// Render tag checkboxes in modals
+function renderTagCheckboxes() {
+  // Habit modal tags
+  const habitTagsContainer = document.getElementById('habitTagsContainer');
+  if (habitTagsContainer) {
+    habitTagsContainer.innerHTML = '';
+
+    // Add custom tag input
+    const customTagDiv = document.createElement('div');
+    customTagDiv.className = 'mb-3 flex gap-2';
+    const customTagInput = document.createElement('input');
+    customTagInput.type = 'text';
+    customTagInput.id = 'habitCustomTag';
+    customTagInput.placeholder = 'Add custom tag...';
+    customTagInput.className = 'flex-1 rounded border border-black px-2 py-1 text-sm';
+    const addTagBtn = document.createElement('button');
+    addTagBtn.type = 'button';
+    addTagBtn.textContent = 'Add';
+    addTagBtn.className = 'rounded border border-black bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200';
+    addTagBtn.addEventListener('click', () => {
+      const tagName = customTagInput.value.trim();
+      if (tagName) {
+        const normalizedTag = tagName.toLowerCase();
+        const exists = allTags.some(tag => tag.toLowerCase() === normalized);
+        if (!exists) {
+          allTags.push(tagName);
+          allTags.sort();
+          renderTagCheckboxes();
+          renderTagsDropdown();
+          customTagInput.value = '';
+        }
+      }
+    });
+    customTagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addTagBtn.click();
+      }
+    });
+    customTagDiv.appendChild(customTagInput);
+    customTagDiv.appendChild(addTagBtn);
+    habitTagsContainer.appendChild(customTagDiv);
+
+    const tagsGrid = document.createElement('div');
+    tagsGrid.className = 'grid grid-cols-2 gap-2';
+
+    allTags.forEach(tag => {
+      const tagItem = document.createElement('label');
+      tagItem.className = 'flex items-center gap-2 px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 cursor-pointer';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = tag;
+      checkbox.className = 'habit-tag-checkbox rounded';
+      checkbox.dataset.tag = tag;
+
+      const tagText = document.createElement('span');
+      tagText.className = 'text-sm';
+      tagText.textContent = tag;
+
+      tagItem.appendChild(checkbox);
+      tagItem.appendChild(tagText);
+      tagsGrid.appendChild(tagItem);
+    });
+
+    habitTagsContainer.appendChild(tagsGrid);
+  }
+
+  // Task modal tags
+  const taskTagsContainer = document.getElementById('taskTagsContainer');
+  if (taskTagsContainer) {
+    taskTagsContainer.innerHTML = '';
+
+    // Add custom tag input
+    const customTagDiv = document.createElement('div');
+    customTagDiv.className = 'mb-3 flex gap-2';
+    const customTagInput = document.createElement('input');
+    customTagInput.type = 'text';
+    customTagInput.id = 'taskCustomTag';
+    customTagInput.placeholder = 'Add custom tag...';
+    customTagInput.className = 'flex-1 rounded border border-black px-2 py-1 text-sm';
+    const addTagBtn = document.createElement('button');
+    addTagBtn.type = 'button';
+    addTagBtn.textContent = 'Add';
+    addTagBtn.className = 'rounded border border-black bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200';
+    addTagBtn.addEventListener('click', () => {
+      const tagName = customTagInput.value.trim();
+      if (tagName) {
+        const normalized = tagName.toLowerCase();
+        const exists = allTags.some(tag => tag.toLowerCase() === normalized);
+        if(!exists) {
+          allTags.push(tagName);
+          allTags.sort();
+          renderTagCheckboxes();
+          renderTagsDropdown();
+          customTagInput.value = '';
+        }
+      }
+    });
+    customTagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addTagBtn.click();
+      }
+    });
+    customTagDiv.appendChild(customTagInput);
+    customTagDiv.appendChild(addTagBtn);
+    taskTagsContainer.appendChild(customTagDiv);
+
+    const tagsGrid = document.createElement('div');
+    tagsGrid.className = 'grid grid-cols-2 gap-2';
+
+    allTags.forEach(tag => {
+      const tagItem = document.createElement('label');
+      tagItem.className = 'flex items-center gap-2 px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 cursor-pointer';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = tag;
+      checkbox.className = 'task-tag-checkbox rounded';
+      checkbox.dataset.tag = tag;
+
+      const tagText = document.createElement('span');
+      tagText.className = 'text-sm';
+      tagText.textContent = tag;
+
+      tagItem.appendChild(checkbox);
+      tagItem.appendChild(tagText);
+      tagsGrid.appendChild(tagItem);
+    });
+
+    taskTagsContainer.appendChild(tagsGrid);
+  }
+}
+
 // Load habits
 async function loadHabits() {
   try {
-    const response = await fetch(`${API_BASE}/api/habits/?filter=${habitFilter}`);
+    let url = `${API_BASE}/api/habits/?filter=${habitFilter}`;
+    if (searchQuery) {
+      url += `&search=${encodeURIComponent(searchQuery)}`;
+    }
+    if (selectedTags.length > 0) {
+      url += `&tag=${encodeURIComponent(selectedTags[0])}`;
+    }
+    const response = await fetch(url);
     const data = await response.json();
     habits = data.habits;
     renderHabits();
@@ -154,13 +416,26 @@ function createHabitCard(habit) {
           <div class="text-sm text-gray-600">${habit.details || ''}</div>
           <div class="mt-1 flex items-center gap-2 text-xs">
             <span>+${habit.pos_count} | -${habit.neg_count}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="h-3 w-3">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
+            ${habit.tags && habit.tags.length > 0 ? `
+              <div class="flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-3 w-3 text-gray-500 cursor-pointer">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z" />
+                </svg>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                  <div class="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg">
+                    ${habit.tags.join(', ')}
+                  </div>
+                  <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                    <div class="border-4 border-transparent border-t-gray-900"></div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-shrink-0">
         <button onclick="editHabit(${habit.id})" class="flex h-8 w-8 items-center justify-center rounded-full border border-black hover:bg-blue-100" title="Edit habit">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
@@ -206,7 +481,14 @@ async function completeHabit(habitId, isPositive) {
 // load tasks
 async function loadTasks() {
   try {
-    const response = await fetch(`${API_BASE}/api/tasks/?filter=${taskFilter}`);
+    let url = `${API_BASE}/api/tasks/?filter=${taskFilter}`;
+    if (searchQuery) {
+      url += `&search=${encodeURIComponent(searchQuery)}`;
+    }
+    if (selectedTags.length > 0) {
+      url += `&tag=${encodeURIComponent(selectedTags[0])}`;
+    }
+    const response = await fetch(url);
     const data = await response.json();
     tasks = data.tasks;
     renderTasks();
@@ -290,20 +572,32 @@ function createTaskCard(task) {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 8.038 7.047 8.287 8.287 0 0 0 5 9.601a8.983 8.983 0 0 1 1.5-4.396 8.288 8.288 0 0 0 7.496 0M15 21a2.25 2.25 0 0 0 4.5 0A9.178 9.178 0 0 0 15 5.435c-2.485 0-4.5 2.015-4.5 4.5 0 1.204.497 2.292 1.302 3.08M15 21a2.25 2.25 0 0 1-4.5 0c0-1.204.497-2.292 1.302-3.08" />
               </svg>
               <span>${task.streak}</span>
-              ` : `
+              ` : task.due ? `
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-3 w-3">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
                 </svg>
                 <span class="${isOverdue ? 'text-red-600' : ''}">${dueDateText}</span>
-              `}
-              <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="ml-auto h-3 w-3">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
+              ` : ''}
+            ${task.tags && task.tags.length > 0 ? `
+              <div class="relative group ml-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-3 w-3 text-gray-500 cursor-pointer">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z" />
+                </svg>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                  <div class="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg">
+                    ${task.tags.join(', ')}
+                  </div>
+                  <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                    <div class="border-4 border-transparent border-t-gray-900"></div>
+                  </div>
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-shrink-0">
         <button onclick="editTask(${task.id})" class="flex h-8 w-8 items-center justify-center rounded-full border border-black hover:bg-blue-100" title="Edit task">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
@@ -540,7 +834,11 @@ async function editHabit(habitId) {
     document.getElementById('habitAllowPositive').checked = habit.allow_pos;
     document.getElementById('habitAllowNegative').checked = habit.allow_neg;
     document.getElementById('habitResetFreq').value = habit.reset_freq || 'never';
-    document.getElementById('habitTags').value = habit.tags.join(', ');
+
+    // Set tag checkboxes
+    document.querySelectorAll('.habit-tag-checkbox').forEach(checkbox => {
+      checkbox.checked = habit.tags.includes(checkbox.dataset.tag);
+    });
 
     // Set form to edit mode
     const form = document.getElementById('habitForm');
@@ -568,7 +866,11 @@ async function editTask(taskId) {
     document.getElementById('taskDetails').value = task.details || '';
     document.getElementById('taskType').value = task.task_type;
     document.getElementById('taskDifficulty').value = task.diff;
-    document.getElementById('taskTags').value = task.tags.join(', ');
+    
+    // Set tag checkboxes
+    document.querySelectorAll('.task-tag-checkbox').forEach(checkbox => {
+      checkbox.checked = task.tags.includes(checkbox.dataset.tag);
+    });
 
     // Handle due date
     if (task.due && task.task_type === 'scheduled') {
@@ -706,6 +1008,7 @@ async function createHabit(formData) {
     if (response.ok) {
       closeModal('habitModal');
       loadHabits();
+      loadTags();
     }
   } catch (error) {
     console.error('Error saving habit:', error);
@@ -739,6 +1042,7 @@ async function createTask(formData) {
     if (response.ok) {
       closeModal('taskModal');
       loadTasks();
+      loadTags();
     }
   } catch (error) {
     console.error('Error saving task:', error);

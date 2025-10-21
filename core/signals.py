@@ -1,12 +1,17 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
-from .models import UserProfile, Habit, Task
+from .models import UserProfile, Habit, Task, Tag
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
   """Create UserProfile and examples when a new user is created"""
   if created:
+    # Ensure default tags exist
+    default_tags = ["Work", "Health", "Creativity", "Study", "Exercise", "Hobby", "Chores"]
+    for tag_name in default_tags:
+      Tag.objects.get_or_create(name=tag_name)
+      
     profile = UserProfile.objects.create(user=instance)
     habit = Habit.objects.create(
       user=instance,

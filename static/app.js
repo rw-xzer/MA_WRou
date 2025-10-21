@@ -38,6 +38,15 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSubjectColors();
 
   checkActiveStudySession();
+  
+  // Simple fix: if coins text is just a number, add "Coins: " prefix
+  // This handles cases where something overwrites it
+  setInterval(() => {
+    const coinsText = document.getElementById('coinsText');
+    if (coinsText && /^\d+$/.test(coinsText.textContent.trim())) {
+      coinsText.textContent = `Coins: ${coinsText.textContent.trim()}`;
+    }
+  }, 200);
 });
 
 // Set up event listeners
@@ -147,7 +156,11 @@ function updateUserProfile() {
 
   if (healthText) healthText.textContent = `${userProfile.hp}/${userProfile.max_hp}`;
   if (xpText) xpText.textContent = `${userProfile.xp}/${userProfile.max_xp}`;
-  if (coinsText) coinsText.textContent = userProfile.coins;
+  
+  // Set coins text with proper format
+  if (coinsText) {
+    coinsText.textContent = `Coins: ${userProfile.coins || 0}`;
+  }
 
   // Update avatar state
   updateAvatar(userProfile.avatar_state);

@@ -363,10 +363,26 @@ def api_complete_habit(request, habit_id):
       HabitLog.objects.create(habit=habit, positive=True)
 
       profile, _ = UserProfile.objects.get_or_create(user=request.user)
-      xp = {'trivial': 5, 'easy': 10, 'medium': 20, 'hard': 40}[habit.diff]
+      
+      # Base XP : 3-5
+      base_min = 3
+      base_max = 5
+
+      # Add diff bonus : +2xp per diff
+      diff_bonus = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[habit.diff]
+      xp = random.randint(base_min + diff_bonus, base_max + diff_bonus)
+
       profile.add_xp(xp)
-      coins = random.randint(0, 5)
-      profile.add_coins(coins)
+      
+      # Coins : medium = 1-3, hard = 3-5
+      coins = 0
+      if habit.diff == 'medium':
+        coins = random.randint(1,3)
+      elif habit.diff == 'hard':
+        coins = random.randint(3,5)
+      
+      if coins > 0:
+        profile.add_coins(coins)
       profile.all_time_habits_completed += 1
       profile.save()
 
@@ -375,7 +391,14 @@ def api_complete_habit(request, habit_id):
       HabitLog.objects.create(habit=habit, positive=False)
 
       profile, _ = UserProfile.objects.get_or_create(user=request.user)
-      profile.lose_health(5)
+      
+      # Negative habits : same value as XP gain
+      base_min = 3
+      base_max = 5
+      diff_penalty = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[habit.diff]
+      hp_loss = random.randint(base_min + diff_penalty, base_max + diff_penalty)
+      profile.lose_health(hp_loss)
+
       profile.save()
 
     return JsonResponse({'success': True})
@@ -395,10 +418,25 @@ def api_complete_task(request, task_id):
       TaskLog.objects.create(task=task)
 
       profile, _ = UserProfile.objects.get_or_create(user=request.user)
-      xp = {'trivial': 5, 'easy': 10, 'medium': 20, 'hard': 40}[task.diff]
+      
+      # Base XP : 5-10
+      base_min = 5
+      base_max = 10
+
+      # Add diff bonus : +2xp per diff
+      diff_bonus = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[task.diff]
+      xp = random.randint(base_min + diff_bonus, base_max + diff_bonus)
       profile.add_xp(xp)
-      coins = random.randint(0, 5)
-      profile.add_coins(coins)
+      
+      # Coins : medium = 1-3, hard = 3-5
+      coins = 0
+      if task.diff == 'medium':
+        coins = random.randint(1,3)
+      elif task.diff == 'hard':
+        coins = random.randint(3,5)
+
+      if coins > 0:
+        profile.add_coins(coins)
       profile.all_time_tasks_completed += 1
 
       # Update longest daily streak
@@ -433,8 +471,12 @@ def api_check_dailies(request):
   missed_dailies = 0
 
   for daily in dailies:
-    if daily.last_completed is None or daily.last_completed < today:
-      profile.lose_health(5)
+    if daily.last_completed is None or daily.last_completed.date() < today:
+      # Missed dailies : -2 hp base, + diff : -1hp
+      hp_loss = 2
+      diff_penalty = {'trivial': 0, 'easy': 1, 'medium': 2, 'hard': 3}[daily.diff]
+      hp_loss += diff_penalty
+      profile.lose_health(hp_loss)
       missed_dailies += 1
 
   overdue = Task.objects.filter(
@@ -445,8 +487,18 @@ def api_check_dailies(request):
   )
 
   for task in overdue:
+    # Missed duedates : -2hp base, + diff : -1hp
+    hp_loss = 2
+    diff_penalty = {'trivial': 0, 'easy': 1, 'medium': 2, 'hard': 3}[task.diff]
+    hp_loss += diff_penalty
+    
+    # per additional missed week : * 2 penalty
     days_overdue = (timezone.now() - task.due).days
-    profile.lose_health(min(days_overdue, 14))
+    weeks_overdue = days_overdue // 7
+    if weeks_overdue > 0:
+      hp_loss = hp_loss * (2 ** weeks_overdue)
+    
+    profile.lose_health(hp_loss)
 
   profile.save()
 

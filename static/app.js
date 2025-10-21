@@ -14,6 +14,16 @@ let searchQuery = '';
 let selectedTags = [];
 let allTags = [];
 
+// Study session state
+let studySessionTimer = null;
+let studySessionStartTime = null;
+let studySessionDuration = null;
+let studySessionMode = 'timer';
+let studySessionPaused = false;
+let studySessionPausedStartTime = null;
+let studySessionTotalPausedTime = 0;
+let subjectColors = {};
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   loadUserProfile();
@@ -24,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
   checkDailies();
   loadStatSlots();
   setupEventListeners();
+  initializeColorPicker();
+  loadSubjectColors();
 
   checkActiveStudySession();
 });
@@ -970,7 +982,166 @@ function showStudyModal() {
   const modal = document.getElementById('studyModal');
   if (modal) {
     modal.classList.remove('hidden');
+    
+    // Reset form
+    document.getElementById('studySubject').value = '';
+    document.getElementById('studyMode').value = 'timer';
+    document.getElementById('studyDuration').value = '25';
+    document.getElementById('selectedColor').value = '#3b82f6'
+    toggleStudyDurationField()
+    //Reset color picker
+    const shadePicker = document.getElementById('shadeColorPicker');
+    if (shadePicker) {
+      shadePicker.classList.add('hidden');
+    }
+    document.querySelectorAll('.base-color-btn').forEach(btn => {
+      btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+    });
+
+    // select first base color by default
+    const firstBaseBtn = document.querySelector('.base-color-btn');
+    if (firstBaseBtn) {
+      const baseColor = firstBaseBtn.dataset.baseColor;
+      showColorShades(0, baseColor);
+      setTimeout(() => {
+        const firstShadeBtn = document.querySelector('.shade-color-btn');
+        if (firstShadeBtn) {
+          selectColor(firstShadeBtn.dataset.color);
+        }
+      }, 100);
+    }
   }
+}
+
+//initialize color picker with 8 base colors and 10 shades each
+function initializeColorPicker() {
+  const baseColors = [
+    { name: 'Red', base: '#c52626ff' },
+    { name: 'Blue', base: '#2354beff' },
+    { name: 'Green', base: '#2e7d32ff' },
+    { name: 'Yellow', base: '#f9a825ff' },
+    { name: 'Purple', base: '#6a1b9aff' },
+    { name: 'Orange', base: '#ef6c00ff' },
+    { name: 'Pink', base: '#d81b60ff' },
+    { name: 'Cyan', base: '#00acc1ff' },
+  ];
+
+  const baseColorPicker = document.getElementById('baseColorPicker');
+  if (!baseColorPicker) return;
+
+  baseColors.forEach((color, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'base-color-btn h-10 w-10 rounded-full border-2 border-black hover:scale-110 transition-transform';
+    btn.style.backgroundColor = color.base;
+    btn.dataset.colorIndex = index;
+    btn.dataset.baseColor = color.base;
+    btn.title = color.name;
+    btn.addEventListener('click', () => showColorShades(index, color.base));
+    baseColorPicker.appendChild(btn);
+  });
+}
+
+// Show color shades for selected base color
+function showColorShades(colorIndex, baseColor) {
+  const shadePicker = document.getElementById('shadeColorPicker');
+  const baseBtns = document.querySelectorAll('.base-color-btn');
+
+  // Reset base color buttons
+  baseBtns.forEach(btn => {
+    btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+  });
+  baseBtns[colorIndex].classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+
+  //Generate 10 shades
+  shadePicker.innerHTML = '';
+  const shades = generateColorShades(baseColor, 10);
+
+  shades.forEach((shade, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'shade-color-btn h-8 w-8 rounded-full border border-gray-300 hover:scale-110 transition-transform';
+    btn.style.backgroundColor = shade;
+    btn.dataset.color = shade;
+    btn.title = shade;
+    btn.addEventListener('click', () => selectColor(shade));
+    shadePicker.appendChild(btn);
+  });
+
+  shadePicker.classList.remove('hidden');
+}
+
+// Generate color shades
+function generateColorShades(baseColor, count) {
+  let hex = baseColor.replace('#', '');
+  // Handle 8-character hex (with alpha channel) by removing last 2 characters
+  if (hex.length === 8) {
+    hex = hex.substr(0, 6);
+  }
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+
+  const shades = [];
+  for (let i = 0; i < count; i++) {
+    const factor = i / (count - 1);
+    const newR = Math.max(0, Math.min(255, Math.round(r * (1 - factor * 0.4))));
+    const newG = Math.max(0, Math.min(255, Math.round(g * (1 - factor * 0.4))));
+    const newB = Math.max(0, Math.min(255, Math.round(b * (1 - factor * 0.4))));
+    
+    const hexR = newR.toString(16).padStart(2, '0');
+    const hexG = newG.toString(16).padStart(2, '0');
+    const hexB = newB.toString(16).padStart(2, '0');
+    shades.push(`#${hexR}${hexG}${hexB}`);
+  }
+  return shades;
+}
+
+// Select a color shade
+function selectColor(color) {
+  const colorInput = document.getElementById('selectedColor');
+  if (colorInput) {
+    colorInput.value = color;
+  }
+  const shadeBtns = document.querySelectorAll('.shade-color-btn');
+  shadeBtns.forEach(btn => {
+    btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+    if (btn.dataset.color === color) {
+      btn.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+    }
+  });
+}
+
+// Toggle study duration field based on mode
+function toggleStudyDurationField() {
+  const mode = document.getElementById('studyMode').value;
+  const durationField = document.getElementById('studyDurationField');
+  if (mode === 'stopwatch') {
+    durationField.style.display = 'none';
+  } else {
+    durationField.style.display = 'block';
+  }
+}
+
+//load subject colors from localStorage
+function loadSubjectColors() {
+  const stored = localStorage.getItem('subjectColors');
+  if (stored) {
+    subjectColors = JSON.parse(stored);
+  }
+}
+
+//Save subject colors to localStorage
+function saveSubjectColors() {
+  localStorage.setItem('subjectColors', JSON.stringify(subjectColors));
+}
+
+// Get color for subject
+function getSubjectColor(subject) {
+  if (subjectColors[subject]) {
+    return subjectColors[subject];
+  }
+  return '#3b82f6';
 }
 
 //close modal
@@ -1050,7 +1221,29 @@ async function createTask(formData) {
 }
 
 // start study session
-async function startStudySession(subject) {
+async function startStudySession(params) {
+  // Support both object and individual parameters for backwards compatibility
+  let subject, mode, duration, color;
+  
+  if (typeof params === 'object' && params !== null && params.subject !== undefined) {
+    // New signature: called with object {subject, mode, duration, color}
+    subject = params.subject;
+    mode = params.mode || 'timer';
+    duration = params.duration || 25;
+    color = params.color || '#3b82f6';
+  } else {
+    // Old signature: (subject, mode, duration, color) - called with individual params
+    subject = arguments[0];
+    mode = arguments[1] || 'timer';
+    duration = arguments[2] || 25;
+    color = arguments[3] || '#3b82f6';
+  }
+
+  if (!subject) {
+    console.error('Subject is required');
+    return;
+  }
+
   try {
     const response = await fetch(`${API_BASE}/api/habits/study/start/`, {
       method: 'POST',
@@ -1062,12 +1255,177 @@ async function startStudySession(subject) {
     });
 
     if (response.ok) {
-      activeStudySession = true;
+      const data = await response.json();
+      activeStudySession = {
+        id: data.id,
+        subject: subject,
+        mode: mode,
+        duration:duration,
+        color: color,
+        startTime: Date.now(),
+      };
+
+      //save subject color
+      subjectColors[subject] = color;
+      saveSubjectColors();
+
+      //start timer/stopwatch
+      startStudyTimer(mode, duration);
+
+      //show active session
+      showActiveStudySession();
+
+      //disable non-productivity features
+      disableNonProductivityFeatures();
+
       closeModal('studyModal');
       loadUserProfile();
     }
   } catch (error) {
     console.error('Error starting study session:', error);
+  }
+}
+
+// start study timer/stopwatch
+function startStudyTimer(mode, durationMinutes) {
+  studySessionMode = mode;
+  studySessionPaused = false;
+  studySessionStartTime = null;
+  studySessionTotalPausedTime = 0;
+
+  if (mode === 'timer') {
+    studySessionDuration = durationMinutes * 60;
+    studySessionStartTime = Date.now();
+  } else {
+    studySessionDuration = 0;
+    studySessionStartTime = Date.now();
+  }
+
+  updateStudyTimerDisplay();
+  studySessionTimer = setInterval(updateStudyTimerDisplay, 1000);
+}
+
+// Update study timer display
+function updateStudyTimerDisplay() {
+  const timerDisplay = document.getElementById('studySessionTimer');
+  if (!timerDisplay || !activeStudySession) return;
+
+  let displaySeconds = 0;
+
+  if (studySessionMode === 'timer') {
+    if (studySessionPaused) {
+      displaySeconds = studySessionDuration;
+    } else {
+      const elapsed = Math.floor((Date.now() - studySessionStartTime) / 1000) - studySessionTotalPausedTime;
+      displaySeconds = Math.max(0, studySessionDuration - elapsed);
+
+      // Timer finished
+      if (displaySeconds <= 0) {
+        clearInterval(studySessionTimer);
+        displaySeconds = 0;
+        stopStudySession();
+        alert('Study session complete!');
+      }
+    }
+  } else {
+    // Stopwatch mode
+    if (studySessionPaused) {
+      displaySeconds = studySessionDuration;
+    } else {
+      const elapsed = Math.floor((Date.now() - studySessionStartTime) / 1000) - studySessionTotalPausedTime;
+      displaySeconds = studySessionDuration + elapsed;
+    }
+  }
+
+  // Format as HH:MM:SS
+  const hours = Math.floor(displaySeconds / 3600);
+  const minutes = Math.floor((displaySeconds % 3600) / 60);
+  const seconds = displaySeconds % 60;
+  timerDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// show active study session
+function showActiveStudySession() {
+  const modal = document.getElementById('activeStudySessionModal');
+  if (!modal || !activeStudySession) return;
+
+  const subjectEl = document.getElementById('studySessionSubject');
+  const colorIndicator = document.getElementById('studySessionColorIndicator');
+  
+  if (subjectEl) {
+    subjectEl.textContent = activeStudySession.subject;
+  }
+  if (colorIndicator) {
+    colorIndicator.style.backgroundColor = activeStudySession.color;
+  }
+  
+  modal.classList.remove('hidden');
+}
+
+// hide active study session modal
+function hideActiveStudySession() {
+  const modal = document.getElementById('activeStudySessionModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// Pause/resume study session
+function pauseStudySession() {
+  if (!activeStudySession) return;
+
+  const pauseText = document.getElementById('studySessionPauseText');
+  if (!pauseText) return;
+
+  if (!studySessionPaused) {
+    // Pause
+    clearInterval(studySessionTimer);
+    const now = Date.now();
+    const elapsed = Math.floor((now - studySessionStartTime) / 1000) - studySessionTotalPausedTime;
+
+    if (studySessionMode === 'stopwatch') {
+      studySessionDuration += elapsed;
+    } else {
+      studySessionDuration = Math.max(0, studySessionDuration - elapsed);
+    }
+
+    studySessionPaused = true;
+    studySessionPausedStartTime = now;
+    pauseText.textContent = 'Resume';
+  } else {
+    //Resume
+    if (studySessionPausedStartTime) {
+      const pausedDuration = Math.floor((Date.now() - studySessionPausedStartTime) / 1000);
+      studySessionTotalPausedTime += pausedDuration;
+    }
+    studySessionPaused = false;
+    studySessionPausedStartTime = null;
+    studySessionTimer = setInterval(updateStudyTimerDisplay, 1000);
+    pauseText.textContent = 'Pause';
+  }
+}
+
+// Disable non-productivity features during study session
+function disableNonProductivityFeatures() {
+  // disable shop
+  const shopLink = document.querySelector('a[href="/shop/"]');
+  if (shopLink) {
+    shopLink.style.pointerEvents = 'none';
+    shopLink.style.opacity = '0.5';
+    shopLink.style.cursor = 'not-allowed';
+  }
+
+  // TODO: disable other non-productivity features if added in future
+}
+
+// Enable non-productivity features after study session
+function enableNonProductivityFeatures() {
+  // enable shop
+  const shopLink = document.querySelector('a[href="/shop/"]');
+  if (shopLink) {
+    shopLink.style.pointerEvents = '';
+    shopLink.style.opacity = '';
+    shopLink.style.cursor = '';
   }
 }
 
@@ -1083,7 +1441,15 @@ async function stopStudySession() {
     });
 
     if (response.ok) {
-      activeStudySession = false;
+      // Clear timer
+      if (studySessionTimer) {
+        clearInterval(studySessionTimer);
+        studySessionTimer = null;
+      }
+
+      activeStudySession = null;
+      hideActiveStudySession();
+      enableNonProductivityFeatures();
       loadUserProfile();
       loadStatSlots();
       loadRecap();
@@ -1093,10 +1459,21 @@ async function stopStudySession() {
   }
 }
 
+// stop active study session (wrapper)
+function stopActiveStudySession() {
+  stopStudySession();
+}
+
 // check active study session
 async function checkActiveStudySession() {
-  // TODO: implement this function; too tired rn
-  // For now, assume no active session on page load
+  try {
+    if (userProfile && userProfile.avatar_state === 'studying') {
+      // TODO : API call to get active session details
+      // could be active session but need api endpoint to confirm, for now assume no active session on page load
+    }
+  } catch (error) {
+    console.error('Error checking active study session:', error);
+  }
 }
 
 // show stat slot modal
@@ -1198,7 +1575,6 @@ function getCsrfToken() {
   }
   return '';
 }
-
 // Show Level Up Animation
 function showLevelUpAnimation() {
   const avatar = document.getElementById('avatar');

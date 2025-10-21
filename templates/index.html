@@ -106,7 +106,7 @@
 
     <!-- Search and Action Bar -->
     <section
-      class="flex h-[7.6dvh] items-center justify-center bg-inherit px-4 border-b border-gray-200"
+      class="flex h-[7.6dvh] items-center justify-center border-b border-gray-200 bg-inherit px-4"
     >
       <div class="flex w-full items-center gap-4">
         <input
@@ -252,9 +252,49 @@
   <section
     class="absolute top-[8.3dvh] right-0 flex h-[91.7dvh] w-[38.2vw] flex-col bg-gray-50"
   >
+    <!--Study Session Modal (shown when active)-->
+    <div
+      id="activeStudySessionModal"
+      class="hidden border-b border-gray-200 bg-white px-4 py-4"
+    >
+      <div class="flex flex-col items-center gap-3">
+        <!--Subject and Color Display-->
+        <div class="flex items-center gap-2">
+          <div
+            id="studySessionColorIndicator"
+            class="h-6 w-6 rounded-full border-2 border-black"
+          ></div>
+          <span id="studySessionSubject" class="text-lg font-bold"></span>
+        </div>
+
+        <!--Timer/Stopwatch Display-->
+        <div class="font-mono text-4xl font-bold" id="studySessionTimer">
+          00:00:00
+        </div>
+
+        <!--Control Buttons-->
+        <div class="flex gap-2">
+          <button
+            id="studySessionPauseBtn"
+            onclick="pauseStudySession()"
+            class="rounded-lg border border-black bg-gray-100 px-4 py-2 hover:bg-gray-200"
+          >
+            <span id="studySessionPauseText">Pause</span>
+          </button>
+          <button
+            id="studySessionStopBtn"
+            onclick="stopActiveStudySession()"
+            class="rounded-lg border border-black bg-gray-100 px-4 py-2 hover:bg-gray-200"
+          >
+            Stop
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Avatar Section -->
     <section
-      class="flex h-[56.6dvh] flex-col items-center justify-center bg-inherit px-4 py-8 border-b border-gray-200"
+      class="flex h-[56.6dvh] flex-col items-center justify-center border-b border-gray-200 bg-inherit px-4 py-8"
     >
       <div
         id="avatar"
@@ -279,7 +319,7 @@
 
     <!-- Health/XP Bars -->
     <section
-      class="flex h-[11.2dvh] flex-col justify-center bg-inherit px-4 py-4 border-b border-gray-200"
+      class="flex h-[11.2dvh] flex-col justify-center border-b border-gray-200 bg-inherit px-4 py-4"
     >
       <div class="mb-3 flex items-center gap-2">
         <svg
@@ -632,7 +672,7 @@
   id="studyModal"
   class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center bg-black"
 >
-  <div class="w-96 rounded-lg bg-white p-6">
+  <div class="max-h-[90vh] w-96 overflow-y-auto rounded-lg bg-white p-6">
     <h3 class="mb-4 text-xl font-bold">Start Study Session</h3>
     <form
       id="studyForm"
@@ -651,11 +691,30 @@
         />
       </div>
 
+      <!--Color Picker-->
       <div class="mb-4">
-        <label for="studyUnlimited" class="flex items-center gap-2">
-          <input type="checkbox" id="studyUnlimited" class="rounded" />
-          <span>Stopwatch</span>
-        </label>
+        <label class="mb-2 block text-sm font-medium">Subject Color</label>
+        <div id="baseColorPicker" class="mb-2 flex gap-2">
+          <!--Base colors here-->
+        </div>
+        <div id="shadeColorPicker" class="grid hidden grid-cols-5 gap-2">
+          <!--Shade colors here-->
+        </div>
+        <input type="hidden" id="selectedColor" value="#3b82f6" />
+      </div>
+
+      <div class="mb-4">
+        <label for="studyMode" class="mb-1 block text-sm font-medium"
+          >Mode</label
+        >
+        <select
+          id="studyMode"
+          class="w-full rounded border border-black px-3 py-2"
+          onchange="toggleStudyDurationField()"
+        >
+          <option value="timer">Timer</option>
+          <option value="stopwatch">Stopwatch</option>
+        </select>
       </div>
       <div class="mb-4" id="studyDurationField">
         <label class="mb-1 block text-sm font-medium">Duration (minutes)</label>
@@ -663,6 +722,7 @@
           type="number"
           id="studyDuration"
           min="1"
+          value="25"
           class="w-full rounded border border-black px-3 py-2"
         />
       </div>
@@ -795,7 +855,21 @@
 
   function startStudyFromForm() {
     const subject = document.getElementById("studySubject").value;
-    startStudySession(subject);
+    const mode = document.getElementById("studyMode").value;
+    const duration =
+      parseInt(document.getElementById("studyDuration").value) || 25;
+    const color = document.getElementById("selectedColor").value;
+    startStudySession({ subject, mode, duration, color });
+  }
+
+  function toggleStudyDurationField() {
+    const mode = document.getElementById("studyMode").value;
+    const durationField = document.getElementById("studyDurationField");
+    if (mode === "stopwatch") {
+      durationField.style.display = "none";
+    } else {
+      durationField.style.display = "block";
+    }
   }
 
   function toggleTaskDateField() {
@@ -819,6 +893,7 @@
   window.createTaskFromForm = createTaskFromForm;
   window.startStudyFromForm = startStudyFromForm;
   window.toggleTaskDateField = toggleTaskDateField;
+  window.toggleStudyDurationField = toggleStudyDurationField;
   window.updateStatSlotFromModal = updateStatSlotFromModal;
   window.completeHabit = completeHabit;
   window.completeTask = completeTask;
@@ -832,5 +907,7 @@
   window.editTask = editTask;
   window.deleteHabit = deleteHabit;
   window.deleteTask = deleteTask;
+  window.pauseStudySession = pauseStudySession;
+  window.stopActiveStudySession = stopActiveStudySession;
 </script>
 {% endblock %}

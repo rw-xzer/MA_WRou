@@ -39,14 +39,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
   checkActiveStudySession();
   
-  // Simple fix: if coins text is just a number, add "Coins: " prefix
-  // This handles cases where something overwrites it
-  setInterval(() => {
+  // Keeps prefix Coins:
+  // Don't remove else only number is shown
+  const fixCoinsText = () => {
     const coinsText = document.getElementById('coinsText');
-    if (coinsText && /^\d+$/.test(coinsText.textContent.trim())) {
-      coinsText.textContent = `Coins: ${coinsText.textContent.trim()}`;
+    if (coinsText) {
+      const currentText = coinsText.textContent.trim();
+      if (/^\d+$/.test(currentText)) {
+        coinsText.textContent = `Coins: ${currentText}`;
+      } else if (userProfile && !currentText.startsWith('Coins:')) {
+        coinsText.textContent = `Coins: ${userProfile.coins || 0}`;
+      } else if (userProfile && currentText.startsWith('Coins:')) {
+        const match = currentText.match(/Coins:\s*(\d+)/);
+        if (match && match[1] !== String(userProfile.coins || 0)) {
+          coinsText.textContent = `Coins: ${userProfile.coins || 0}`;
+        }
+      }
     }
-  }, 200);
+  };
+  
+  // Start observing once the element exists
+  const observeCoinsText = () => {
+    const coinsText = document.getElementById('coinsText');
+    if (coinsText) {
+      coinsTextObserver.observe(coinsText, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+      fixCoinsText();
+    } else {
+      setTimeout(observeCoinsText, 50);
+    }
+  };
+  observeCoinsText();
 });
 
 // Set up event listeners
@@ -157,9 +183,20 @@ function updateUserProfile() {
   if (healthText) healthText.textContent = `${userProfile.hp}/${userProfile.max_hp}`;
   if (xpText) xpText.textContent = `${userProfile.xp}/${userProfile.max_xp}`;
   
-  // Set coins text with proper format
+  // Ensure coins text is always set and visible
   if (coinsText) {
-    coinsText.textContent = `Coins: ${userProfile.coins || 0}`;
+    const coinsValue = userProfile.coins != null ? userProfile.coins : 0;
+    coinsText.textContent = `Coins: ${coinsValue}`;
+    coinsText.style.display = '';
+    coinsText.style.visibility = 'visible';
+    
+    // Double-check immediately after setting (in case something overwrites it)
+    setTimeout(() => {
+      const currentText = coinsText.textContent.trim();
+      if (!currentText.startsWith('Coins:') || /^\d+$/.test(currentText)) {
+        coinsText.textContent = `Coins: ${coinsValue}`;
+      }
+    }, 0);
   }
 
   // Update avatar state
@@ -460,7 +497,7 @@ function createHabitCard(habit) {
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div class="flex items-center gap-2 flex-shrink-0 ml-2">
         <button onclick="editHabit(${habit.id})" class="flex h-8 w-8 items-center justify-center rounded-full border border-black hover:bg-blue-100" title="Edit habit">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
@@ -622,7 +659,7 @@ function createTaskCard(task) {
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div class="flex items-center gap-2 flex-shrink-0 mr-2">
         <button onclick="editTask(${task.id})" class="flex h-8 w-8 items-center justify-center rounded-full border border-black hover:bg-blue-100" title="Edit task">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />

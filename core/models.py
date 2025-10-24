@@ -115,16 +115,85 @@ class Habit(models.Model):
     ratio = self.pos_count / total if total > 0 else 0
 
     # Red: rgb (180, 40, 40), Blue: rgb (35, 150, 180)
-    if ratio == 0:
-      return '#b42828'
-    elif ratio < 0.25:
-      return '#c54028'
-    elif ratio < 0.5:
-      return '#d2642d'
-    elif ratio < 0.75:
-      return "#44b8c7"
+    #Use HSL interpolation for smoother gradient
+    def rgb_to_hsl(r, g, b):
+      """Convert RGB to HSL"""
+      r, g, b = r / 255.0, g / 255.0, b / 255.0
+      max_val = max(r, g, b)
+      min_val = min(r, g, b)
+      diff = max_val - min_val
+      l = (max_val + min_val) / 2.0
+
+      if diff == 0:
+        h = s = 0
+      else:
+        s = diff / (2.0 - max_val - min_val) if l > 0.5 else diff / (max_val + min_val)
+
+        if max_val == r:
+          h = ((g - b) / diff + (6 if g < b else 0)) / 6.0
+        elif max_val == g:
+          h = ((b - r) / diff + 2) / 6.0
+        else:
+          h = ((r - g) /diff + 4) / 6.0
+
+      return h, s, l
+    
+    def hsl_to_rgb(h, s, l):
+      """Convert HSL to RGB"""
+      if s == 0:
+        r = g= b = 1
+      else:
+        def hue_to_rgb(p, q, t):
+          if t < 0: t += 1
+          if t > 1: t -= 1
+          if t < 1/6: return p + (q - p) * 6 * t
+          if t < 1/2: return q
+          if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+          return p
+
+        q = l * (1 + s) if l < 0.5 else l + s - l * s
+        p = 2 * l - q
+        r = hue_to_rgb(p, q, h + 1/3)
+        g = hue_to_rgb(p, q, h)
+        b = hue_to_rgb(p, q, h - 1/3)
+
+      return int(r * 255), int(g * 255), int(b * 255)
+
+    def interpolate_hsl(color1, color2, t):
+      """Interpolate between two hex colors in HSL space"""
+      r1, g1, b1 = int(color1[1:3], 16), int(color1[3:5], 16), int(color1[5:7], 16)
+      r2, g2, b2 = int(color2[1:3], 16), int(color2[3:5], 16), int(color2[5:7], 16)
+
+      h1, s1, l1 = rgb_to_hsl(r1, g1, b1)
+      h2, s2, l2 = rgb_to_hsl(r2, g2, b2)
+
+      # Handle hue wrap-around
+      if abs(h2 - h1) > 0.5:
+        if h1 > h2:
+          h2 += 1.0
+        else:
+          h1 += 1.0
+
+      h = (h1 + (h2 - h1) * t) % 1.0
+      s = s1 + (s2 - s1) * t
+      l = l1 + (l2 - l1) * t
+
+      r, g, b = hsl_to_rgb(h, s, l)
+      return f'#{r:02x}{g:02x}{b:02x}'
+
+    #Map ratio to gradient segments
+    if ratio <= 0.33:
+      # Red to Orange (0.0 to 0.33)
+      t = ratio / 0.33
+      return interpolate_hsl('#b42828', '#d2642d', t)
+    elif ratio <= 0.50:
+      # Orange to Cyan
+      t = (ratio - 0.33) / 0.17
+      return interpolate_hsl('#d2642d', '#44b8c7', t)
     else:
-      return '#2396b4'
+      # Cyan to Blue
+      t = (ratio - 0.50) / 0.50
+      return interpolate_hsl('#44b8c7', '#2396b4', t)
     
   def strong(self):
     """Check if habit is strong"""

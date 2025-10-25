@@ -349,6 +349,8 @@ class TaskLog(models.Model):
   """Log entries for task completions"""
   task = models.ForeignKey(Task, on_delete=models.CASCADE)
   created_at = models.DateTimeField(auto_now_add=True)
+  xp_earned = models.IntegerField(default=0)
+  coins_earned = models.IntegerField(default=0)
 
 class StatSlot(models.Model):
   """User custom stat display slots"""

@@ -156,6 +156,7 @@ def api_tasks(request):
     'task_type': task.task_type,
     'due': task.due,
     'completed': task.completed,
+    'completed_at': task.completed_at.isoformat() if task.completed_at else None,
     'streak': task.streak,
     'color': task.get_color(),
     'overdue': task.overdue(), 
@@ -175,8 +176,8 @@ def api_create_habit(request):
     title=data.get('title'),
     details=data.get('details', ''),
     diff=data.get('diff', 'trivial'),
-    allow_pos=data.get('allow_pos', True),
-    allow_neg=data.get('allow_neg', True),
+    allow_pos=data.get('allow_pos', data.get('allow_positive', True)),
+    allow_neg=data.get('allow_neg', data.get('allow_negative', True)),
     reset_freq=data.get('reset_freq', 'never'),
   )
 
@@ -199,8 +200,15 @@ def api_update_habit(request, habit_id):
     habit.title = data.get('title', habit.title)
     habit.details = data.get('details', habit.details)
     habit.diff = data.get('diff', habit.diff)
-    habit.allow_pos = data.get('allow_pos', habit.allow_pos)
-    habit.allow_neg = data.get('allow_neg', habit.allow_neg)
+    # Support both field name formats for compatibility
+    if 'allow_pos' in data:
+      habit.allow_pos = data.get('allow_pos')
+    elif 'allow_positive' in data:
+      habit.allow_pos = data.get('allow_positive')
+    if 'allow_neg' in data:
+      habit.allow_neg = data.get('allow_neg')
+    elif 'allow_negative' in data:
+      habit.allow_neg = data.get('allow_negative')
     habit.reset_freq = data.get('reset_freq', habit.reset_freq)
     habit.save()
 
@@ -409,13 +417,94 @@ def api_complete_habit(request, habit_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_complete_task(request, task_id):
-  """Complete a task"""
+  """Complete/uncomplete a task"""
   try:
     task = Task.objects.get(id=task_id, user=request.user)
 
-    if not task.completed:
+    import json
+    data = json.loads(request.body) if request.body else {}
+    mark_completed = data.get('completed', True)
+
+    #If uncompleting
+    if not mark_completed and task.completed:
+      profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+      #Find the most recent TaskLog for task
+      try:
+        task_log = TaskLog.objects.filter(task=task).order_by('-created_at').first()
+        if task_log:
+          xp_deduct = task_log.xp_earned
+          coins_deduct = task_log.coins_earned
+
+          # Deduct XP
+          current_xp = profile.xp
+          current_level = profile.level
+
+          # Remove XP
+          profile.xp = max(0, profile.xp - xp_deduct)
+
+          #Check for level-down
+          if profile.xp < 0:
+            levels_down = 0
+            temp_xp = abs(profile.xp)
+            temp_level = current_level
+
+            while temp_xp > 0 and temp_level > 1:
+              xp_needed = ((temp_level -2) + (temp_level -1)) * 30 if temp_level > 1 else 30
+              if temp_xp >= xp_needed:
+                temp_xp -= xp_needed
+                temp_level -= 1
+                levels_down += 1
+              else:
+                break
+            
+            profile.level = max(1, profile.level - levels_down)
+            if profile.level < current_level:
+              xp_needed = ((profile.level -1) + profile.level) * 30 if profile.level > 1 else 30
+              profile.xp = max(0, xp_needed - temp_xp)
+              profile.max_xp = ((profile.level - 1) + profile.level) * 30 if profile.level > 1 else 30
+            else:
+              profile.xp = 0
+
+          #Remove coins
+          profile.coins = max(0, profile.coins - coins_deduct)
+
+          # Decrement all_time_tasks_completed
+          profile.all_time_tasks_completed = max(0, profile.all_time_tasks_completed - 1)
+
+          # Reverse streak if incremented
+          if task.task_type == 'daily' and task.last_completed:
+            from datetime import date
+            today = date.today()
+            last_completed_date = task.last_completed.date() if hasattr(task.last_completed, 'date') else task.last_completed
+            if last_completed_date == today and task.streak > 0:
+              task.streak = max(0, task.streak - 1)
+
+          #Update longest streak if needed
+          if task.task_type == 'daily' and task.streak < profile.longest_daily_streak:
+            max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(Max('streak'))['streak__max'] or 0
+            profile.longest_daily_streak = max_streak
+
+          profile.save()
+
+          #Delete task log entry
+          task_log.delete()
+      
+      except Exception as e:
+        pass
+
+      task.completed = False
+      task.completed_at = None
+      task.save()
+      return JsonResponse({
+        'success': True,
+        'level_up': False,
+        'xp_earned': - xp_deduct if 'xp_deduct' in locals() else 0,
+        'coins_earned': -coins_deduct if 'coins_deduct' in locals() else 0,
+      })
+    
+    if mark_completed and not task.completed:
       task.complete()
-      TaskLog.objects.create(task=task)
 
       profile, _ = UserProfile.objects.get_or_create(user=request.user)
       
@@ -440,9 +529,13 @@ def api_complete_task(request, task_id):
       profile.all_time_tasks_completed += 1
 
       # Update longest daily streak
+      old_longest_streak = profile.longest_daily_streak
       if task.task_type == 'daily' and task.streak > profile.longest_daily_streak:
         profile.longest_daily_streak = task.streak
       profile.save()
+
+      # Store earned amount in TaskLog
+      TaskLog.objects.create(task=task, xp_earned=xp, coins_earned=coins)
 
       level_up = profile.xp >= profile.max_xp
       if level_up:
@@ -456,7 +549,12 @@ def api_complete_task(request, task_id):
         'coins_earned': coins,
       })
     
-    return JsonResponse({'error': 'Task already completed'}, status=400)
+    return JsonResponse({
+      'success': True,
+      'level_up': False,
+      'xp_earned': 0,
+      'coins_earned': 0,
+    })
   except Task.DoesNotExist:
     return JsonResponse({'error': 'Task not found'}, status=404)
   

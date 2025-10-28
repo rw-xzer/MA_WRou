@@ -1,3 +1,28 @@
+/* Color Schemes */
+:root {
+  --bg-primary: #fef7ed;
+  --bg-secondary: #fff9f0;
+  --bg-card: #ffffff;
+  --bg-accent: #fef3c7;
+  --bg-accent-hover: #fde68a;
+  
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+
+  --color-success: #10b981;
+  --color-energy: #f59e0b;
+  --color-focus: #3b82f6;
+  --color-achievement: #8b5cf6;
+  --color-progress: #06b6d4;
+  --color-health: #ef4444;
+  --color-warm: #f97316;
+
+  --border-color: #e5e7eb;
+  --border-dark: #9ca3af;
+}
+
+
 /* Avatar animations */
 .avatar {
   transition: all 0.3s ease;
@@ -87,4 +112,3 @@
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
-

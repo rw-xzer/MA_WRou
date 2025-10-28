@@ -4,9 +4,7 @@
 {% endblock %} {% block content %}
 <main class="flex">
   <!-- Left Main Section -->
-  <section
-    class="relative left-0 flex h-[91.7dvh] w-[61.8vw] flex-col bg-gray-50"
-  >
+  <section class="relative left-0 flex h-[91.7dvh] w-[61.8vw] flex-col">
     <!-- Last Week Recap Section -->
     <section class="flex flex-col bg-inherit px-4 py-4">
       <h1 class="mb-4 text-[2em] font-bold">Last Week Recap</h1>
@@ -61,16 +59,13 @@
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-            stroke="currentColor"
+            fill="currentColor"
+            viewBox="0 0 640 640"
             class="h-6 w-6"
           >
+            <!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.-->
             <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 8.038 7.047 8.287 8.287 0 0 0 5 9.601a8.983 8.983 0 0 1 1.5-4.396 8.288 8.288 0 0 0 7.496 0M15 21a2.25 2.25 0 0 0 4.5 0A9.178 9.178 0 0 0 15 5.435c-2.485 0-4.5 2.015-4.5 4.5 0 1.204.497 2.292 1.302 3.08M15 21a2.25 2.25 0 0 1-4.5 0c0-1.204.497-2.292 1.302-3.08"
+              d="M256.5 37.6C265.8 29.8 279.5 30.1 288.4 38.5C300.7 50.1 311.7 62.9 322.3 75.9C335.8 92.4 352 114.2 367.6 140.1C372.8 133.3 377.6 127.3 381.8 122.2C382.9 120.9 384 119.5 385.1 118.1C393 108.3 402.8 96 415.9 96C429.3 96 438.7 107.9 446.7 118.1C448 119.8 449.3 121.4 450.6 122.9C460.9 135.3 474.6 153.2 488.3 175.3C515.5 219.2 543.9 281.7 543.9 351.9C543.9 475.6 443.6 575.9 319.9 575.9C196.2 575.9 96 475.7 96 352C96 260.9 137.1 182 176.5 127C196.4 99.3 216.2 77.1 231.1 61.9C239.3 53.5 247.6 45.2 256.6 37.7zM321.7 480C347 480 369.4 473 390.5 459C432.6 429.6 443.9 370.8 418.6 324.6C414.1 315.6 402.6 315 396.1 322.6L370.9 351.9C364.3 359.5 352.4 359.3 346.2 351.4C328.9 329.3 297.1 289 280.9 268.4C275.5 261.5 265.7 260.4 259.4 266.5C241.1 284.3 207.9 323.3 207.9 370.8C207.9 439.4 258.5 480 321.6 480z"
             />
           </svg>
           <span id="dailiesCard" class="text-sm font-medium"
@@ -92,10 +87,12 @@
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V2.75a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.1 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904m14.141-2.25a11.999 11.999 0 0 0-2.5 5.642M11.25 2.25H9A2.25 2.25 0 0 0 6.75 4.5v15A2.25 2.25 0 0 0 9 21.75h2.25A2.25 2.25 0 0 0 13.5 19.5v-15a2.25 2.25 0 0 0-2.25-2.25Z"
+              d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V2.75a.75.75 0 0 1 .75-.75 2.25 2.25 0 0 1 2.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.1 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904"
             />
           </svg>
-          <span class="text-sm font-medium">Stopped Procrastination</span>
+          <span id="bestHabitCard" class="text-sm font-medium"
+            >Stopped Procrastination</span
+          >
         </div>
       </div>
       <p id="recapText" class="mb-2 text-sm text-gray-600">Loading recap...</p>
@@ -381,7 +378,11 @@
         </div>
         <!-- Right side: Coins counter -->
         <div class="flex shrink-0 items-center self-center">
-          <span id="coinsText" class="text-sm font-medium whitespace-nowrap text-gray-900">Coins: 0</span>
+          <span
+            id="coinsText"
+            class="text-sm font-medium whitespace-nowrap text-gray-900"
+            >Coins: 0</span
+          >
         </div>
       </div>
     </section>
@@ -448,9 +449,11 @@
 <!-- Habit Modal -->
 <div
   id="habitModal"
-  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center bg-black overflow-y-auto py-4"
+  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center overflow-y-auto bg-black py-4"
 >
-  <div class="w-96 max-h-[90vh] rounded-lg bg-white p-6 my-auto overflow-y-auto">
+  <div
+    class="my-auto max-h-[90vh] w-96 overflow-y-auto rounded-lg bg-white p-6"
+  >
     <h3 class="mb-4 text-xl font-bold">Add Habit</h3>
     <form
       id="habitForm"
@@ -574,9 +577,11 @@
 <!-- Task Modal -->
 <div
   id="taskModal"
-  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center bg-black overflow-y-auto py-4"
+  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center overflow-y-auto bg-black py-4"
 >
-  <div class="w-96 max-h-[90vh] rounded-lg bg-white p-6 my-auto overflow-y-auto">
+  <div
+    class="my-auto max-h-[90vh] w-96 overflow-y-auto rounded-lg bg-white p-6"
+  >
     <h3 class="mb-4 text-xl font-bold">Add Task</h3>
     <form
       id="taskForm"
@@ -683,9 +688,11 @@
 <!-- Study Session Modal -->
 <div
   id="studyModal"
-  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center bg-black overflow-y-auto py-4"
+  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center overflow-y-auto bg-black py-4"
 >
-  <div class="max-h-[90vh] w-96 rounded-lg bg-white p-6 my-auto overflow-y-auto">
+  <div
+    class="my-auto max-h-[90vh] w-96 overflow-y-auto rounded-lg bg-white p-6"
+  >
     <h3 class="mb-4 text-xl font-bold">Start Study Session</h3>
     <form
       id="studyForm"
@@ -762,9 +769,11 @@
 <!-- Stat Slot Modal -->
 <div
   id="statSlotModal"
-  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center bg-black overflow-y-auto py-4"
+  class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center overflow-y-auto bg-black py-4"
 >
-  <div class="w-96 max-h-[90vh] rounded-lg bg-white p-6 my-auto overflow-y-auto">
+  <div
+    class="my-auto max-h-[90vh] w-96 overflow-y-auto rounded-lg bg-white p-6"
+  >
     <h3 class="mb-4 text-xl font-bold">Select Stat</h3>
     <div class="flex flex-col gap-2">
       <button

@@ -609,6 +609,7 @@ def api_check_dailies(request):
 @require_http_methods(["GET"])
 def api_last_week_recap(request):
   """Generate last week recap with standout stats algorithm"""
+  TESTING_MODE = False  # Set to False for normal operation - shows all placeholder boxes when True
   prev_week = timezone.now() - timedelta(days=7)
   prev_week_start = prev_week.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -699,9 +700,46 @@ def api_last_week_recap(request):
         })
         break
 
-  # Sort score and take top 3-5
-  standout_items.sort(key=lambda x: x['score'], reverse=True)
-  standout_items = standout_items[:5]
+  # In testing mode, show placeholder boxes for all highlight types
+  if TESTING_MODE:
+    # Add placeholders for all possible highlight types
+    if not any(item['type'] == 'streak' for item in standout_items):
+      standout_items.append({'type': 'streak', 'title': 'Example Daily Task', 'description': '7 day streak!', 'icon': 'flame', 'score': 70})
+    if not any(item['type'] == 'habit' for item in standout_items):
+      standout_items.append({'type': 'habit', 'title': 'Example Habit', 'description': 'Completed 10 times', 'icon': 'thumbs-up', 'score': 50})
+    if not any(item['type'] == 'study' for item in standout_items):
+      standout_items.append({'type': 'study', 'title': 'Mathematics', 'description': '2.5 hour session', 'icon': 'clock', 'score': 150})
+    if not any(item['type'] == 'habit_ratio' for item in standout_items):  
+      # Sort score - show all items (no limit)
+      standout_items.sort(key=lambda x: x['score'], reverse=True)
+
+  # Find best habit for "Stopped Procrastination" card
+  best_habit_title = "Stopped Procrastination"
+  best_habit = None
+  best_score = 0
+  
+  all_habits = Habit.objects.filter(user=request.user)
+  for habit in all_habits:
+    # If only positive is allowed, use highest pos_count
+    if not habit.allow_neg and habit.allow_pos:
+      if habit.pos_count > best_score:
+        best_score = habit.pos_count
+        best_habit = habit
+    # Otherwise, check for good pos/neg ratio
+    elif habit.allow_neg and habit.allow_pos:
+      total = habit.pos_count + habit.neg_count
+      if total >= 3:  # Minimum activity threshold
+        ratio = habit.pos_count / total if total > 0 else 0
+        # Consider it "good" if ratio >= 0.7 (70% positive)
+        if ratio >= 0.7:
+          # Score based on ratio and total activity
+          score = ratio * 100 + (total * 0.1)
+          if score > best_score:
+            best_score = score
+            best_habit = habit
+  
+  if best_habit:
+    best_habit_title = best_habit.title
 
   if standout_items:
     recap_text = "Last week highlights:"
@@ -714,6 +752,7 @@ def api_last_week_recap(request):
     'tasks_completed': tasks_completed,
     'missed_dailies': missed_dailies,
     'items': standout_items,
+    'best_habit_title': best_habit_title,
   })
 
 @login_required

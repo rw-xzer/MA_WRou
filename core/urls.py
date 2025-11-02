@@ -31,5 +31,6 @@ urlpatterns = [
   path("api/tags/", views.api_tags, name="api_tags"),
   path("api/shop/purchase/", views.api_purchase_item, name="api_purchase_item"),
   path("api/shop/items/", views.api_shop_items, name="api_shop_items"),
-  path("api/stats/monthly/", views.api_monthly_stats, name="api_monthly_stats"),
+  path("api/study/stats/", views.api_study_stats, name="api_study_stats"),
+  path("api/study/colors", views.api_subject_colors, name="api_subject_colors"),
 ]

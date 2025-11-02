@@ -16,6 +16,7 @@ from .models import (
     Habit,
     Task,
     StudySession,
+    SubjectColor,
     Tag,
     HabitLog,
     TaskLog,
@@ -55,7 +56,13 @@ def index(request):
 
 @login_required
 def stats_page(request):
-  """Monthly stat page"""
+  """Monthly stat page - inaccessible during active study session"""
+  # Check if user has an active study session
+  active_session = StudySession.objects.filter(user=request.user, active=True).first()
+  if active_session:
+    # Redirect to home page
+    return redirect('index')
+  
   return render(request, 'stats.html')
 
 @login_required
@@ -318,28 +325,119 @@ def api_delete_task(request, task_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_start_study_session(request):
-  """Start a study session"""
+  """Start a study session with color conflict handling"""
   data = json.loads(request.body)
+  subject = data.get('subject', 'General')
+  color = data.get('color', '#FFFFFF')
+  carry_over_colors = data.get('carry_over_colors', False)
+
+  now = timezone.now()
+  year = now.year
+  month = now.month
 
   StudySession.objects.filter(user=request.user, active=True).update(active=False)
 
+  first_session_this_month = not StudySession.objects.filter(
+    user=request.user,
+    start_time__year=year,
+    start_time__month=month,
+    active=False
+  ).exists()
+
+  # If first session and user wants to carry over colors, copy last month's colors
+  if first_session_this_month and carry_over_colors:
+    last_month = month - 1
+    last_year = year
+    if last_month == 0:
+      last_month = 12
+      last_year = year - 1
+    
+    last_month_colors = SubjectColor.objects.filter(
+      user=request.user,
+      year=last_year,
+      month=last_month
+    )
+
+    for old_color in last_month_colors:
+      SubjectColor.objects.get_or_create(
+        user=request.user,
+        subject=old_color.subject,
+        year=year,
+        month=month,
+        defaults={'color': old_color.color}
+      )
+
+  # Check for color conflicts
+  existing_color = SubjectColor.objects.filter(
+    user=request.user,
+    color=color,
+    year=year,
+    month=month
+  ).exclude(subject=subject).first()
+
+  subject_changed = False
+  if existing_color:
+    # Color is taken, change subject to the one using this color
+    subject = existing_color.subject
+    subject_changed = True
+
+  # Get or create color assignment for this subject
+  # Always ensure the color is set, even if the subject already exists
+  subject_color_obj, created = SubjectColor.objects.get_or_create(
+    user=request.user,
+    subject=subject,
+    year=year,
+    month=month,
+    defaults={'color': color}
+  )
+
+  # Always update the color to ensure it's current (unless subject was changed due to conflict)
+  if not subject_changed:
+    if subject_color_obj.color != color:
+      subject_color_obj.color = color
+      subject_color_obj.save()
+
   session = StudySession.objects.create(
     user=request.user,
-    subject=data.get('subject', 'General'),
+    subject=subject,
+    color=subject_color_obj.color,
   )
 
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
   profile.avatar_state = 'studying'
   profile.save()
 
-  return JsonResponse({'id': session.id, 'success': True})
+  return JsonResponse({
+    'id': session.id,
+    'success': True,
+    'subject': subject,
+    'subject_changed': subject_changed,
+    'color': subject_color_obj.color,
+  })
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["POST", "GET"])
 def api_stop_study_session(request):
-  """Stop active study session"""
+  """Stop active study session or check if one exists"""
   session = StudySession.objects.filter(user=request.user, active=True).first()
+  
+  # If GET request, just check and return status
+  if request.method == 'GET':
+    response_data = {
+      'has_active_session': session is not None,
+      'active': session is not None,
+    }
+    if session:
+      response_data['session_id'] = session.id
+      response_data['subject'] = session.subject
+      response_data['color'] = session.color or '#3b82f6'
+      response_data['start_time'] = session.start_time.isoformat()
+      # Try to get mode and duration from session if stored
+      # For now, we'll need to infer or store these separately
+      # Check if there's a way to get mode/duration from the session
+      # If not available, we'll need to add these fields to the model or store them differently
+    return JsonResponse(response_data)
 
   if session:
     duration = session.stop()
@@ -639,7 +737,7 @@ def api_check_dailies(request):
     task_type='scheduled',
     completed=False,
     due__gte=yesterday_start,
-    dute__lte=yesterday_end,
+    due__lte=yesterday_end,
   )
 
   pending_tasks_data = []
@@ -1016,35 +1114,214 @@ def api_purchase_item(request):
   
 @login_required
 @require_http_methods(["GET"])
-def api_monthly_stats(request):
+def api_study_stats(request):
   """Get monthly study stats (subject, day)"""
+  view_type = request.GET.get('type', 'monthly')
   now = timezone.now()
-  start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-  
-  sessions = StudySession.objects.filter(
-    user=request.user,
-    start_time__gte=start_of_month,
-    active=False
-  )
 
-  stats_by_subject = {}
-  stats_by_day = {}
+  if view_type == 'monthly':
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if now.month == 12:
+      end_of_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+      end_of_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
-  for session in sessions:
-    subject = session.subject
-    day = session.start_time.date()
-    duration = (session.duration_minutes or 0) / 60
+    sessions = StudySession.objects.filter(
+      user=request.user,
+      start_time__gte=start_of_month,
+      start_time__lt=end_of_month,
+      active=False
+    )
 
-    if subject not in stats_by_subject:
+    year = now.year
+    month = now.month
+    color_legend = {}
+    subject_colors = SubjectColor.objects.filter(
+      user=request.user,
+      year=year,
+      month=month
+    )
+    for sc in subject_colors:
+      color_legend[sc.subject] = sc.color
+
+    stats_by_day = {}
+    stats_by_subject = {}
+    total_hours = 0
+
+    # Initialize all subjects with 0 hours
+    for subject in color_legend.keys():
       stats_by_subject[subject] = 0
-    stats_by_subject[subject] += duration
 
-    day_str = day.isoformat()
-    if day_str not in stats_by_day:
-      stats_by_day[day_str] = 0
-    stats_by_day[day_str] += duration
+    for session in sessions:
+      day = session.start_time.date()
+      day_str = day.isoformat()
+      subject = session.subject
+      duration_hours = (session.duration_minutes or 0) / 60.0
+      total_hours += duration_hours
 
-  return JsonResponse({
-    'by_subject': stats_by_subject,
-    'by_day': stats_by_day,
-  })
+      if day_str not in stats_by_day:
+        stats_by_day[day_str] = {}
+      if subject not in stats_by_day[day_str]:
+        stats_by_day[day_str][subject] = 0
+      stats_by_day[day_str][subject] += duration_hours
+
+      if subject not in stats_by_subject:
+        stats_by_subject[subject] = 0
+      stats_by_subject[subject] += duration_hours
+
+    return JsonResponse({
+      'type': 'monthly',
+      'year': year,
+      'month': month,
+      'by_day': stats_by_day,
+      'by_subject': stats_by_subject,
+      'color_legend': color_legend,
+      'total_hours': round(total_hours, 2),
+    })
+  
+  else:
+    # Get current week
+    days_since_monday = now.weekday()
+    start_of_week = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_week = start_of_week + timedelta(days=7)
+
+    sessions = StudySession.objects.filter(
+      user=request.user,
+      start_time__gte=start_of_week,
+      start_time__lt=end_of_week,
+      active=False
+    )
+
+    # Get color legend for current month
+    year = now.year
+    month = now.month
+    color_legend = {}
+    subject_colors = SubjectColor.objects.filter(
+      user=request.user,
+      year=year,
+      month=month
+    )
+    for sc in subject_colors:
+      color_legend[sc.subject] = sc.color
+
+    stats_by_day = {}
+    stats_by_subject = {}
+    total_hours = 0
+
+    # Initialize all subjects with 0 hours
+    for subject in color_legend.keys():
+      stats_by_subject[subject] = 0
+
+    for session in sessions:
+      day = session.start_time.date()
+      day_str = day.isoformat()
+      subject = session.subject
+      duration_hours = (session.duration_minutes or 0) / 60.0
+      total_hours += duration_hours
+
+      if day_str not in stats_by_day:
+        stats_by_day[day_str] = {
+          'subjects': {},
+          'sessions': []
+        }
+      
+      if subject not in stats_by_day[day_str]['subjects']:
+        stats_by_day[day_str]['subjects'][subject] = 0
+      stats_by_day[day_str]['subjects'][subject] += duration_hours
+
+      stats_by_day[day_str]['sessions'].append({
+        'subject': subject,
+        'start_time': session.start_time.isoformat(),
+        'duration_minutes': session.duration_minutes or 0,
+        'color': session.color or color_legend.get(subject, '#FFFFFF'),
+      })
+
+      if subject not in stats_by_subject:
+        stats_by_subject[subject] = 0
+      stats_by_subject[subject] += duration_hours
+
+    return JsonResponse({
+      'type': 'weekly',
+      'start_date': start_of_week.isoformat(),
+      'end_date': end_of_week.isoformat(),
+      'by_day': stats_by_day,
+      'by_subject': stats_by_subject,
+      'color_legend': color_legend,
+      'total_hours': round(total_hours, 2),
+    })
+  
+@login_required
+@csrf_exempt
+@require_http_methods(['GET', 'POST'])
+def api_subject_colors(request):
+  """Get or update subject color legend for current month"""
+  try:
+    now = timezone.now()
+    year = now.year
+    month = now.month
+
+    if request.method == 'GET':
+      subject_colors = SubjectColor.objects.filter(
+        user=request.user,
+        year=year,
+        month=month
+      )
+      color_legend = {}
+      used_colors = set()
+      for sc in subject_colors:
+        color_legend[sc.subject] = sc.color
+        used_colors.add(sc.color)
+
+      return JsonResponse({
+        'color_legend': color_legend,
+        'used_colors': list(used_colors),
+      })  
+
+    else:
+      data = json.loads(request.body)
+      color_legend = data.get('color_legend', {})
+      subject_renames = data.get('subject_renames', {})  # Maps new_name -> old_name
+
+      # Handle subject renames first
+      for new_name, old_name in subject_renames.items():
+        if new_name != old_name:
+          # Update all StudySession records for this month
+          StudySession.objects.filter(
+            user=request.user,
+            subject=old_name,
+            start_time__year=year,
+            start_time__month=month
+          ).update(subject=new_name)
+          
+          # Update SubjectColor
+          SubjectColor.objects.filter(
+            user=request.user,
+            subject=old_name,
+            year=year,
+            month=month
+          ).update(subject=new_name)
+      
+      # Update or create all subjects with their colors
+      new_subjects = set(color_legend.keys())
+      for subject, color in color_legend.items():
+        SubjectColor.objects.update_or_create(
+          user=request.user,
+          subject=subject,
+          year=year,
+          month=month,
+          defaults={'color': color}
+        )
+      
+      # Delete subjects that are no longer in the legend
+      SubjectColor.objects.filter(
+        user=request.user,
+        year=year,
+        month=month
+      ).exclude(subject__in=new_subjects).delete()
+
+      return JsonResponse({'success': True})
+  except Exception as e:
+    import traceback
+    traceback.print_exc()
+    return JsonResponse({'error': str(e)}, status=500)
+  

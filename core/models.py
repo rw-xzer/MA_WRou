@@ -318,10 +318,25 @@ class Task(models.Model):
       return timezone.now() > self.due and not self.completed
     return False
   
+class SubjectColor(models.Model):
+  """Monthly color assignments for subjects"""
+  user = models.ForeignKey(User, on_delete=models.CASCADE)
+  subject = models.CharField(max_length = 100)
+  color = models.CharField(max_length=7)
+  year = models.IntegerField()
+  month = models.IntegerField()
+  created_at = models.DateTimeField(auto_now_add=True)
+
+  class Meta:
+    unique_together = ['user', 'subject', 'year', 'month']
+    indexes = [
+      models.Index(fields=['user', 'year', 'month']),]
+
 class StudySession(models.Model):
   """Study sessions with subject and duration tracking"""
   user = models.ForeignKey(User, on_delete=models.CASCADE)
   subject = models.CharField(max_length=100)
+  color = models.CharField(max_length=7, null=True, blank=True)
   start_time = models.DateTimeField(auto_now_add=True)
   end_time = models.DateTimeField(null=True, blank=True)
   duration_minutes = models.IntegerField(null=True, blank=True)

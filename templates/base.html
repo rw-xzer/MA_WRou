@@ -14,7 +14,7 @@
     <nav class="top-0 right-0 left-0 flex h-[8.3dvh] items-center justify-between gap-4 border-b border-blue-300 bg-gradient-to-r from-blue-300 to-cyan-50 px-4 shadow-sm">
       <div class="flex gap-4">
         <a href="{% url 'index' %}" class="{% if request.resolver_match.url_name == 'index' %}font-bold text-lg text-black{% else %}text-gray-700 hover:text-black{% endif %}">Dashboard</a>
-        <a href="{% url 'stats' %}" class="{% if request.resolver_match.url_name == 'stats' %}font-bold text-lg text-black{% else %}text-gray-700 hover:text-black{% endif %}">Study Stats</a>
+        <a href="{% url 'stats' %}" id="studyStatsLink" onclick="return handleStatsLinkClick(event);" class="{% if request.resolver_match.url_name == 'stats' %}font-bold text-lg text-black{% else %}text-gray-700 hover:text-black{% endif %}">Study Stats</a>
         <a href="{% url 'shop' %}" class="{% if request.resolver_match.url_name == 'shop' %}font-bold text-lg text-black{% else %}text-gray-700 hover:text-black{% endif %}">Shop</a>
       </div>
       <div class="flex items-center gap-10">

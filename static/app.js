@@ -36,8 +36,15 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   initializeColorPicker();
   loadSubjectColors();
+  setupStudySubjectAutoColor();
 
-  checkActiveStudySession();
+  checkActiveStudySession().then(() => {
+    // Update stats link after checking active session
+    updateStudyStatsLink();
+  });
+  
+  // Update link more frequently to catch immediate changes
+  setInterval(updateStudyStatsLink, 1000);
   
   // Keeps prefix Coins:
   // Don't remove else only number is shown
@@ -842,13 +849,30 @@ function updateRecap(data) {
 // check dailies
 async function checkDailies() {
   try {
+    // Check if modal has already been shown today
+    const today = new Date().toDateString();
+    const lastShownDate = localStorage.getItem('pendingItemsModalShown');
+    
+    if (lastShownDate === today) {
+      // Modal already shown today, skip
+      return;
+    }
+
     const response = await fetch(`${API_BASE}/api/dailies/check`, {
       method: 'GET',
     });
     const data = await response.json();
 
     if (data.needs_check && (data.pending_dailies.length > 0 || data.pending_tasks.length > 0)) {
-      showPendingItemsModal(data.pending_dailies, data.pending_tasks);
+      // Filter to only show unchecked items
+      const uncheckedDailies = data.pending_dailies.filter(item => !item.completed);
+      const uncheckedTasks = data.pending_tasks.filter(item => !item.completed);
+      
+      if (uncheckedDailies.length > 0 || uncheckedTasks.length > 0) {
+        showPendingItemsModal(uncheckedDailies, uncheckedTasks);
+        // Mark as shown today
+        localStorage.setItem('pendingItemsModalShown', today);
+      }
     }
   } catch (error) {
     console.error('Error checking dailies;', error);
@@ -865,24 +889,28 @@ function showPendingItemsModal(pendingDailies, pendingTasks) {
   listContainer.innerHTML = '';
 
   const allPending = [...pendingDailies, ...pendingTasks];
+  
+  // Filter to only show unchecked items
+  const uncheckedPending = allPending.filter(item => !item.completed);
 
-  if (allPending.length === 0) {
+  if (uncheckedPending.length === 0) {
     listContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No pending items.</p>';
     return;
   }
 
-  allPending.forEach(item => {
+  uncheckedPending.forEach(item => {
     const itemDiv = document.createElement('div');
-    itemDiv.className = 'mb-2 flex items-center gap-3 rounded-lg border border-gray-300 p-3';
+    itemDiv.className = 'mb-2 flex items-center gap-3 rounded-lg border border-gray-300 p-3 transition-opacity duration-300';
+    itemDiv.dataset.itemId = item.id;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `pending_${item.id}`;
     checkbox.dataset.itemId = item.id;
     checkbox.dataset.itemType = item.type;
-    checkbox.checked = item.completed || false;
+    checkbox.checked = false;
     checkbox.className = 'h-5 w-5 rounded border border-black';
     checkbox.addEventListener('change', () => {
-      togglePendingItem(item.id, item.type, checkbox.checked);
+      togglePendingItem(item.id, item.type, checkbox.checked, itemDiv);
     });
 
     const label = document.createElement('label');
@@ -902,7 +930,7 @@ function showPendingItemsModal(pendingDailies, pendingTasks) {
 }
 
 // Toggle pending item; check and uncheck
-async function togglePendingItem(itemId, itemType, isChecked) {
+async function togglePendingItem(itemId, itemType, isChecked, itemDiv) {
   try {
     const response = await fetch(`${API_BASE}/api/tasks/${itemId}/complete/`, {
       method: 'POST',
@@ -918,6 +946,15 @@ async function togglePendingItem(itemId, itemType, isChecked) {
       const task = tasks.find(t => t.id === itemId);
       if (task) {
         task.completed = isChecked;
+      }
+      
+      // Fade out the item when checked
+      if (isChecked && itemDiv) {
+        itemDiv.style.opacity = '0.3';
+        itemDiv.style.pointerEvents = 'none';
+      } else if (!isChecked && itemDiv) {
+        itemDiv.style.opacity = '1';
+        itemDiv.style.pointerEvents = 'auto';
       }
     }
   } catch (error) {
@@ -937,6 +974,10 @@ async function confirmPendingItems() {
     });
 
     if (response.ok) {
+      // Mark modal as shown today (already done when modal was opened, but ensure it's set)
+      const today = new Date().toDateString();
+      localStorage.setItem('pendingItemsModalShown', today);
+      
       closeModal('pendingItemsModal');
       loadTasks();
       loadUserProfile();
@@ -1208,18 +1249,21 @@ function showStudyModal() {
       btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
     });
 
-    // select first base color by default
-    const firstBaseBtn = document.querySelector('.base-color-btn');
-    if (firstBaseBtn) {
-      const baseColor = firstBaseBtn.dataset.baseColor;
-      showColorShades(0, baseColor);
-      setTimeout(() => {
-        const firstShadeBtn = document.querySelector('.shade-color-btn');
-        if (firstShadeBtn) {
-          selectColor(firstShadeBtn.dataset.color);
-        }
-      }, 100);
-    }
+    // reload current month colors when opening modal
+    loadCurrentMonthColors().then(() => {
+      // Select first base color by default
+      const firstBaseBtn = document.querySelector('.base-color-btn');
+      if (firstBaseBtn) {
+        const baseColor = firstBaseBtn.dataset.baseColor;
+        showColorShades(0, baseColor);
+        setTimeout(() => {
+          const firstShadeBtn = document.querySelector('.shade-color-btn');
+          if (firstShadeBtn) {
+            selectColor(firstShadeBtn.dataset.color);
+          }
+        }, 100);
+      }
+    });
   }
 }
 
@@ -1354,6 +1398,130 @@ function getSubjectColor(subject) {
   return '#3b82f6';
 }
 
+// Setup auto-color selection when typing subject name
+let currentMonthColors = {};
+let currentMonthUsedColors = new Set();
+
+async function setupStudySubjectAutoColor() {
+  // Load current month's colors
+  await loadCurrentMonthColors();
+
+  const subjectInput = document.getElementById('studySubject');
+  if (subjectInput) {
+    subjectInput.addEventListener('input', async (e) => {
+      const subject = e.target.value.trim();
+      if (subject) {
+        await handleSubjectColorAutoSelect(subject);
+      }
+    });
+  }
+}
+
+// Load current month's color legend
+async function loadCurrentMonthColors() {
+  try {
+    const response = await fetch(`${API_BASE}/api/study/colors`);
+    const data = await response.json();
+    currentMonthColors = data.color_legend || {};
+    currentMonthUsedColors = new Set(data.used_colors || []);
+  } catch (error) {
+    console.error('Error loading current month colors:', error);
+  }
+}
+
+// Handle autocolor selection for subject
+async function handleSubjectColorAutoSelect(subject) {
+  await loadCurrentMonthColors();
+  if (currentMonthColors[subject]) {
+    const existingColor = currentMonthColors[subject];
+    selectColorInPicker(existingColor);
+    return;
+  }
+  
+  // New subject
+  const defaultColor = '#3b82f6';
+  if (!currentMonthUsedColors.has(defaultColor)) {
+    selectColorInPicker(defaultColor);
+    return;
+  }
+
+  // Default color is taken
+  const availableColor = findRandomAvailableColor();
+  if(availableColor) {
+    selectColorInPicker(availableColor);
+  }
+}
+
+// Find random color
+function findRandomAvailableColor() {
+  const baseColors = [
+    '#c52626', '#2354be', '#2e7d32', '#f9a825',
+    '#6a1b9a', '#ef6c00', '#d81b60', '#00acc1'
+  ];
+
+  const allPossibleColors = [];
+  baseColors.forEach(baseColor => {
+    const shades = generateColorShades(baseColor + 'ff', 10);
+    allPossibleColors.push(...shades);
+  });
+
+  const availableColors = allPossibleColors.filter(color => !currentMonthUsedColors.has(color));
+
+  if (availableColors.length > 0) {
+    return availableColors[Math.floor(Math.random() * availableColors.length)];
+  }
+
+  return '#3b82f6';
+}
+
+// Select color in the color picker
+function selectColorInPicker(color) {
+  const colorInput = document.getElementById('selectedColor');
+  if (colorInput) {
+    colorInput.value = color;
+  }
+
+  const baseColors = [
+    { name: 'Red', base: '#c52626ff' },
+    { name: 'Blue', base: '#2354beff' },
+    { name: 'Green', base: '#2e7d32ff' },
+    { name: 'Yellow', base: '#f9a825ff' },
+    { name: 'Purple', base: '#6a1b9aff' },
+    { name: 'Orange', base: '#ef6c00ff' },
+    { name: 'Pink', base: '#d81b60ff' },
+    { name: 'Cyan', base: '#00acc1ff' },
+  ];
+
+  const normalizedColor = color.length === 7 ? color : color.substring(0, 7);
+
+  // Find base color
+  for (let i = 0; i < baseColors.length; i++) {
+    const baseColor = baseColors[i];
+    const shades = generateColorShades(baseColor.base, 10);
+
+    const matchingShadeIndex = shades.findIndex(shade => {
+      const normalizedShade = shade.length === 7 ? shade : shade.substring(0, 7);
+      return normalizedShade.toLowerCase() === normalizedColor.toLowerCase();
+    });
+
+    if (matchingShadeIndex !== -1) {
+      showColorShades(i, baseColor.base);
+
+      setTimeout(() => {
+        const shadeBtns = document.querySelectorAll('.shade-color-btn');
+        shadeBtns.forEach((btn, idx) => {
+          if (idx === matchingShadeIndex) {
+            selectColor(btn.dataset.color);
+          }
+        });
+      }, 50);
+      return;
+    }
+  }
+
+  selectColor(color);
+}
+
 //close modal
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
@@ -1451,33 +1619,79 @@ async function startStudySession(params) {
 
   if (!subject) {
     console.error('Subject is required');
+    alert('Please enter a subject name');
     return;
   }
 
+  console.log('Starting study session:', { subject, mode, duration, color });
+
   try {
+    // Check if this is the first session of the month (non-blocking)
+    let carryOverColors = false;
+    try {
+      const firstSessionThisMonth = await checkFirstSessionOfMonth();
+      if (firstSessionThisMonth){
+        // Check if user wants to carry over colors
+        const lastMonthColors = await getLastMonthColors();
+        if (lastMonthColors && Object.keys(lastMonthColors).length > 0) {
+          const shouldCarryOver = confirm(
+            'Would you like to carry over the color legend from last month?'
+          );
+          if (shouldCarryOver) {
+            carryOverColors = true;
+          }
+        }
+      }
+    } catch (error) {
+      // If checking first session fails, just continue without carry-over
+      console.warn('Could not check first session of month:', error);
+    }
+
+    console.log('Sending study session request...');
     const response = await fetch(`${API_BASE}/api/habits/study/start/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCsrfToken(),
       },
-      body: JSON.stringify({ subject }),
+      body: JSON.stringify({
+        subject: subject,
+        color: color,
+        carry_over_colors: carryOverColors,
+      }),
     });
 
+    console.log('Study session response status:', response.status);
     if (response.ok) {
       const data = await response.json();
+
+      // Handle subject change due to color conflict
+      if (data.subject_changed && data.subject !== subject) {
+        showMessageBanner(
+          `The color you selected is already being used by "${data.subject}". Your study subject has been changed to "${data.subject}".`,
+        );
+        subject = data.subject;
+      }
       activeStudySession = {
         id: data.id,
         subject: subject,
         mode: mode,
         duration:duration,
-        color: color,
+        color: data.color || color,
         startTime: Date.now(),
       };
 
       //save subject color
-      subjectColors[subject] = color;
+      subjectColors[subject] = data.color || color;
       saveSubjectColors();
+
+      // Save session state to localStorage for restoration after refresh
+      localStorage.setItem('activeStudySessionState', JSON.stringify({
+        mode: mode,
+        duration: duration,
+        startTime: Date.now(),
+        sessionId: data.id
+      }));
 
       //start timer/stopwatch
       startStudyTimer(mode, duration);
@@ -1488,11 +1702,26 @@ async function startStudySession(params) {
       //disable non-productivity features
       disableNonProductivityFeatures();
 
+      // Gray out stats link immediately (don't wait for async)
+      hasActiveSessionForLink = true;
+      const statsLink = document.getElementById('studyStatsLink');
+      if (statsLink) {
+        statsLink.classList.remove('text-gray-700', 'hover:text-black', 'text-black', 'font-bold', 'text-lg');
+        statsLink.classList.add('text-gray-400', 'cursor-not-allowed', 'opacity-50');
+      }
+      // Also update via API check (async)
+      updateStudyStatsLink();
+
       closeModal('studyModal');
       loadUserProfile();
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error starting study session:', response.status, errorData);
+      alert('Failed to start study session. Please try again.');
     }
   } catch (error) {
     console.error('Error starting study session:', error);
+    alert('Failed to start study session. Please check the console for details.');
   }
 }
 
@@ -1660,6 +1889,23 @@ async function stopStudySession() {
       }
 
       activeStudySession = null;
+      hasActiveSessionForLink = false;
+      
+      // Clear stored session state
+      localStorage.removeItem('activeStudySessionState');
+      
+      // Update link color immediately (don't wait for async)
+      const statsLink = document.getElementById('studyStatsLink');
+      if (statsLink) {
+        statsLink.classList.remove('text-gray-400', 'cursor-not-allowed', 'opacity-50');
+        if (window.location.pathname === '/stats/') {
+          statsLink.classList.add('font-bold', 'text-lg', 'text-black');
+        } else {
+          statsLink.classList.add('text-gray-700', 'hover:text-black');
+        }
+      }
+      // Also update via API check (async)
+      updateStudyStatsLink();
       hideActiveStudySession();
       enableNonProductivityFeatures();
       loadUserProfile();
@@ -1717,12 +1963,142 @@ function stopActiveStudySession() {
   stopStudySession();
 }
 
+// Update Study Stats link color based on active session
+let hasActiveSessionForLink = false;
+
+// Global function to handle stats link clicks (called from onclick in HTML)
+function handleStatsLinkClick(event) {
+  if (hasActiveSessionForLink) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    alert('Please finish your active study session before viewing statistics.');
+    return false;
+  }
+  return true;
+}
+
+async function updateStudyStatsLink() {
+  const statsLink = document.getElementById('studyStatsLink');
+  if (!statsLink) {
+    // Retry after a short delay if link doesn't exist yet
+    setTimeout(updateStudyStatsLink, 100);
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/habits/study/stop/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const hasActive = data.active || data.has_active_session;
+      hasActiveSessionForLink = hasActive;
+
+      if (hasActive) {
+        // Gray out the link (like disabled state)
+        statsLink.classList.remove('text-gray-700', 'hover:text-black', 'text-black', 'font-bold', 'text-lg');
+        statsLink.classList.add('text-gray-400', 'cursor-not-allowed', 'opacity-50');
+      } else {
+        // Reset to normal styling
+        statsLink.classList.remove('text-gray-400', 'cursor-not-allowed', 'opacity-50');
+        if (window.location.pathname === '/stats/') {
+          statsLink.classList.add('font-bold', 'text-lg', 'text-black');
+        } else {
+          statsLink.classList.add('text-gray-700', 'hover:text-black');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error checking active session for stats link:', error);
+  }
+}
+
 // check active study session
 async function checkActiveStudySession() {
   try {
-    if (userProfile && userProfile.avatar_state === 'studying') {
-      // TODO : API call to get active session details
-      // could be active session but need api endpoint to confirm, for now assume no active session on page load
+    // Always check for active session, not just when avatar_state is 'studying'
+    const response = await fetch(`${API_BASE}/api/habits/study/stop/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.active || data.has_active_session) {
+        // Restore active session state
+        activeStudySession = {
+          id: data.session_id || null,
+          subject: data.subject || 'Unknown',
+          color: data.color || '#3b82f6',
+          startTime: data.start_time ? new Date(data.start_time) : Date.now(),
+        };
+        
+        // Update user profile avatar state
+        if (userProfile) {
+          userProfile.avatar_state = 'studying';
+        }
+        
+        // Restore timer - calculate elapsed time from start_time
+        if (data.start_time) {
+          const startTime = new Date(data.start_time);
+          studySessionStartTime = startTime.getTime();
+          studySessionPaused = false;
+          studySessionTotalPausedTime = 0;
+          
+          // Try to restore mode and duration from localStorage
+          const storedState = localStorage.getItem('activeStudySessionState');
+          let restoredMode = 'stopwatch';
+          let restoredDuration = 0;
+          
+          if (storedState) {
+            try {
+              const state = JSON.parse(storedState);
+              // Only use stored state if session ID matches
+              if (state.sessionId === data.session_id) {
+                restoredMode = state.mode || 'stopwatch';
+                restoredDuration = state.duration || 0;
+              }
+            } catch (e) {
+              console.error('Error parsing stored session state:', e);
+            }
+          }
+          
+          studySessionMode = restoredMode;
+          
+          if (restoredMode === 'timer' && restoredDuration > 0) {
+            // Timer mode: set original duration, elapsed will be calculated in display function
+            studySessionDuration = restoredDuration * 60; // Convert minutes to seconds
+          } else {
+            // Stopwatch mode: duration starts at 0, elapsed will be added in display function
+            studySessionDuration = 0;
+          }
+          
+          // Restart the timer display
+          if (studySessionTimer) {
+            clearInterval(studySessionTimer);
+          }
+          updateStudyTimerDisplay();
+          studySessionTimer = setInterval(updateStudyTimerDisplay, 1000);
+        }
+        
+        // Show active session UI
+        showActiveStudySession();
+        disableNonProductivityFeatures();
+      } else {
+        // No active session - make sure UI is cleared
+        if (activeStudySession) {
+          activeStudySession = null;
+          hideActiveStudySession();
+          enableNonProductivityFeatures();
+        }
+      }
     }
   } catch (error) {
     console.error('Error checking active study session:', error);
@@ -1815,6 +2191,61 @@ function updateTaskFilters() {
       btn.classList.add('text-gray-600');
     }
   });
+}
+
+// Check if this is the first study session of the month
+async function checkFirstSessionOfMonth() {
+  try {
+    const response = await fetch(`${API_BASE}/api/study/stats/?type=monthly`);
+    if (!response.ok) {
+      console.warn('Failed to fetch monthly stats:', response.status);
+      return false;
+    }
+    const data = await response.json();
+    // If no sessions this month
+    return Object.keys(data.by_day || {}).length === 0;
+  } catch (error) {
+    console.error('Error checking first session of month:', error);
+    return false;
+  }
+}
+
+// Get last month's color legend
+async function getLastMonthColors() {
+  try {
+    const now = new Date();
+    const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+    const lastYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+
+    const response = await fetch(`${API_BASE}/api/study/colors`);
+    if (!response.ok) {
+      console.warn('Failed to fetch colors:', response.status);
+      return null;
+    }
+    const data = await response.json();
+    return data.color_legend || null;
+  } catch (error) {
+    console.error('Error getting last month colors:', error);
+    return null;
+  }
+}
+
+// Show message banner
+function showMessageBanner(message) {
+  const banner = document.getElementById('messageBanner');
+  const messageText = document.getElementById('messageText');
+
+  if (banner && messageText) {
+    messageText.textContent = message;
+    banner.classList.remove('hidden');
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      banner.classList.add('hidden');
+    }, 5000);
+  } else {
+    alert(message);
+  }
 }
 
 // get CSRF token

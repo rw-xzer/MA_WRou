@@ -346,12 +346,60 @@ def api_stop_study_session(request):
 
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     profile.avatar_state = 'idle'
+    xp_earned = 0
+    level_up = False
+    coins_earned = 0
+    hours = 0
+
     if duration:
       hours = duration / 60.0
       profile.all_time_hours_studied += hours
+
+      # Calculate XP rewards for study sessions
+      today = timezone.now().date()
+      today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+      today_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+
+      today_sessions = StudySession.objects.filter(
+        user=request.user,
+        start_time__gte=today_start,
+        start_time__lte=today_end,
+        active=False
+      )
+
+      total_hours_today = sum(
+        (s.duration_minutes or 0) / 60.0 for s in today_sessions
+      )
+
+      xp_per_hour = 10 if total_hours_today >= 5.0 else 5
+      
+      xp_earned = int(hours * xp_per_hour)
+
+      if xp_earned > 0:
+        level_up = profile.add_xp(xp_earned)
+        if level_up:
+          profile.avatar_state = 'celebrating'
+
+      five_hour_blocks = int(total_hours_today // 5)
+      previous_total_hours = total_hours_today - hours
+      previous_blocks = int(previous_total_hours // 5)
+
+      new_blocks = five_hour_blocks - previous_blocks
+      coins_earned = new_blocks * 5
+
+      if coins_earned > 0:
+        profile.add_coins(coins_earned)
+
     profile.save()
 
-    return JsonResponse({'duration_minutes': duration, 'success': True})
+    return JsonResponse({
+      'duration_minutes': duration,
+      'success': True,
+      'xp_earned': xp_earned,
+      'coins_earned': coins_earned,
+      'level_up': level_up,
+      'hours': round(hours, 2),
+    })
   
   return JsonResponse({'error': 'No active study session found'}, status=400)
 
@@ -561,48 +609,135 @@ def api_complete_task(request, task_id):
 @login_required
 @require_http_methods(["GET"])
 def api_check_dailies(request):
-  """Check and update daily task completion"""
+  """Check if there are pending dailies/tasks that need to be reviewed"""
   today = timezone.now().date()
-  dailies = Task.objects.filter(user=request.user, task_type='daily', completed=False)
+  yesterday = today - timedelta(days=1)
+  
+  pending_dailies = []
+  all_dailies = Task.objects.filter(user=request.user, task_type='daily')
+
+  for daily in all_dailies:
+    was_completed_yesterday = False
+    if daily.last_completed:
+      last_completed_date = daily.last_completed.date() if hasattr(daily.last_completed, 'date') else daily.last_completed
+      if last_completed_date == yesterday:
+        was_completed_yesterday = True
+        continue
+    if daily.created_at.date() < today:
+      pending_dailies.append({
+        'id': daily.id,
+        'title': daily.title,
+        'completed': daily.completed,
+        'type': 'daily',
+      })
+    
+  yesterday_start = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
+  yesterday_end = timezone.make_aware(datetime.combine(yesterday, datetime.max.time()))
+
+  pending_tasks = Task.objects.filter(
+    user=request.user,
+    task_type='scheduled',
+    completed=False,
+    due__gte=yesterday_start,
+    dute__lte=yesterday_end,
+  )
+
+  pending_tasks_data = []
+  for task in pending_tasks:
+    pending_tasks_data.append({
+      'id': task.id,
+      'title': task.title,
+      'completed': task.completed,
+      'type': 'task'
+    })
+
+  # Check if modal needs to be shown
+  needs_check = len(pending_dailies) > 0 or len(pending_tasks_data) > 0
+
+  return JsonResponse({
+    'pending_dailies': pending_dailies,
+    'pending_tasks': pending_tasks_data,
+    'needs_check': needs_check,
+  })
+
+@login_required
+@require_http_methods(["POST"])
+def api_reset_dailies(request):
+  """Reset dailies for new day; calculate penalties/rewards"""
+  today = timezone.now().date()
+  yesterday = today - timedelta(days=1)
 
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
-  missed_dailies = 0
+
+  dailies = Task.objects.filter(user=request.user, task_type='daily')
 
   for daily in dailies:
-    if daily.last_completed is None or daily.last_completed.date() < today:
-      # Missed dailies : -2 hp base, + diff : -1hp
+    # Skip dailies created today
+    if daily.created_at.date() == today:
+      continue
+
+    was_completed_yesterday = False
+
+    if daily.last_completed:
+      last_completed_date = daily.last_completed.date() if hasattr(daily.last_completed, 'date') else daily.last_completed
+      if last_completed_date == yesterday or last_completed_date == today:
+        was_completed_yesterday = True
+
+    if not was_completed_yesterday:
       hp_loss = 2
       diff_penalty = {'trivial': 0, 'easy': 1, 'medium': 2, 'hard': 3}[daily.diff]
       hp_loss += diff_penalty
       profile.lose_health(hp_loss)
-      missed_dailies += 1
 
-  overdue = Task.objects.filter(
-    user=request.user,
-    task_type='scheduled',
-    completed=False,
-    due__lt=timezone.now()
-  )
+      if daily.streak > 0:
+        daily.streak = 0
 
-  for task in overdue:
-    # Missed duedates : -2hp base, + diff : -1hp
+  yesterday_start = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
+  yesterday_end = timezone.make_aware(datetime.combine(yesterday, datetime.max.time()))
+
+  overdue_tasks = Task.objects.filter(
+    user = request.user,
+    task_type = 'scheduled',
+    completed = False,
+    due__gte = yesterday_start,
+    due__lte = yesterday_end,
+    )
+  
+  for task in overdue_tasks:
     hp_loss = 2
     diff_penalty = {'trivial': 0, 'easy': 1, 'medium': 2, 'hard': 3}[task.diff]
     hp_loss += diff_penalty
-    
-    # per additional missed week : * 2 penalty
+
     days_overdue = (timezone.now() - task.due).days
     weeks_overdue = days_overdue // 7
     if weeks_overdue > 0:
-      hp_loss = hp_loss * (2 ** weeks_overdue)
-    
+      hp_loss = hp_loss * (2 * weeks_overdue)
+
     profile.lose_health(hp_loss)
+
+  for daily in dailies:
+    daily.completed = False
+    daily.completed_at = None
+
+    if not daily.last_completed:
+      daily.streak = 0
+
+    daily.save()
+
+  habits = Habit.objects.filter(user=request.user)
+  for habit in habits:
+    habit.reset_counters()
+
+  max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(Max('streak'))['streak__max'] or 0
+  if max_streak > profile.longest_daily_streak:
+    profile.longest_daily_streak = max_streak
 
   profile.save()
 
   return JsonResponse({
-    'missed_dailes': missed_dailies,
-    'overdue_tasks': overdue.count(),
+    'success': True,
+    'missed_dailies': dailies.count(),
+    'overdue_tasks': overdue_tasks.count(),
   })
 
 @login_required

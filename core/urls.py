@@ -24,6 +24,7 @@ urlpatterns = [
   path("api/habits/<int:habit_id>/complete/", views.api_complete_habit, name="api_complete_habit"),
   path("api/tasks/<int:task_id>/complete/", views.api_complete_task, name="api_complete_task"),
   path("api/dailies/check", views.api_check_dailies, name="api_check_dailies"),
+  path("api/dailies/reset", views.api_reset_dailies, name="api_reset_dailies"),
   path("api/recap/", views.api_last_week_recap, name="api_recap"),
   path("api/stats/slots/", views.api_stat_slots, name="api_stat_slots"),
   path("api/stats/value/", views.api_stat_value, name="api_stat_value"),

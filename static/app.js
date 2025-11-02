@@ -842,11 +842,109 @@ function updateRecap(data) {
 // check dailies
 async function checkDailies() {
   try {
-    await fetch(`${API_BASE}/api/dailies/check`, {
+    const response = await fetch(`${API_BASE}/api/dailies/check`, {
       method: 'GET',
     });
+    const data = await response.json();
+
+    if (data.needs_check && (data.pending_dailies.length > 0 || data.pending_tasks.length > 0)) {
+      showPendingItemsModal(data.pending_dailies, data.pending_tasks);
+    }
   } catch (error) {
     console.error('Error checking dailies;', error);
+  }
+}
+
+// Show pending items modal
+function showPendingItemsModal(pendingDailies, pendingTasks) {
+  const modal = document.getElementById('pendingItemsModal');
+  const listContainer = document.getElementById('pendingItemsList');
+
+  if (!modal || !listContainer) return;
+
+  listContainer.innerHTML = '';
+
+  const allPending = [...pendingDailies, ...pendingTasks];
+
+  if (allPending.length === 0) {
+    listContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No pending items.</p>';
+    return;
+  }
+
+  allPending.forEach(item => {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'mb-2 flex items-center gap-3 rounded-lg border border-gray-300 p-3';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `pending_${item.id}`;
+    checkbox.dataset.itemId = item.id;
+    checkbox.dataset.itemType = item.type;
+    checkbox.checked = item.completed || false;
+    checkbox.className = 'h-5 w-5 rounded border border-black';
+    checkbox.addEventListener('change', () => {
+      togglePendingItem(item.id, item.type, checkbox.checked);
+    });
+
+    const label = document.createElement('label');
+    label.htmlFor = `pending_${item.id}`;
+    label.className = 'flex-1 cursor-pointer';
+    label.innerHTML = `
+      <div class="font-medium">${item.title}</div>
+      <div class="text-sm text-gray-500">${item.type === 'daily' ? 'Daily' : 'Scheduled Task'}</div>
+    `;
+
+    itemDiv.appendChild(checkbox);
+    itemDiv.appendChild(label);
+    listContainer.appendChild(itemDiv);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+// Toggle pending item; check and uncheck
+async function togglePendingItem(itemId, itemType, isChecked) {
+  try {
+    const response = await fetch(`${API_BASE}/api/tasks/${itemId}/complete/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ completed: isChecked }),
+    });
+
+    if (response.ok) {
+      // Update local state
+      const task = tasks.find(t => t.id === itemId);
+      if (task) {
+        task.completed = isChecked;
+      }
+    }
+  } catch (error) {
+    console.error('Error toggling pending item:', error);
+  }
+}
+
+// Confirm pending items and reset dailies
+async function confirmPendingItems() {
+  try {
+    const response = await fetch(`${API_BASE}/api/dailies/reset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+    });
+
+    if (response.ok) {
+      closeModal('pendingItemsModal');
+      loadTasks();
+      loadUserProfile();
+      loadStatSlots();
+    }
+  } catch (error) {
+    console.error('Error confirming pending items:', error);
+    alert('Error resetting dailies. Please try again.');
   }
 }
 
@@ -1553,6 +1651,8 @@ async function stopStudySession() {
     });
 
     if (response.ok) {
+      const data = await response.json();
+
       // Clear timer
       if (studySessionTimer) {
         clearInterval(studySessionTimer);
@@ -1565,10 +1665,51 @@ async function stopStudySession() {
       loadUserProfile();
       loadStatSlots();
       loadRecap();
+
+      if (data.level_up) {
+        showLevelUpAnimation();
+      }
+
+      // Show completion modal with session stats
+      showStudySessionCompletionModal(data);
     }
   } catch (error) {
     console.error('Error stopping study session:', error);
   }
+}
+
+// Show study session completion modal
+function showStudySessionCompletionModal(data) {
+  if (!data) {
+    console.error('No data provided to showStudySessionCompletionModal');
+    return;
+  }
+
+  const modal = document.getElementById('studySessionCompletionModal');
+  const hoursEl = document.getElementById('completionHours');
+  const xpEl = document.getElementById('completionXP');
+  const coinsEl = document.getElementById('completionCoins');
+
+  if (!modal) {
+    console.error('Modal element not found');
+    return;
+  }
+
+  if (!hoursEl || !xpEl || !coinsEl) {
+    console.error('Modal content elements not found');
+    return;
+  }
+
+  const hours = data.hours || (data.duration_minutes ? (data.duration_minutes / 60.0).toFixed(2) : '0');
+  const xp = data.xp_earned || 0;
+  const coins = data.coins_earned || 0;
+
+  hoursEl.textContent = `${hours} hours`;
+  xpEl.textContent = `+${xp}`;
+  coinsEl.textContent = `+${coins}`;
+
+  modal.classList.remove('hidden');
+  console.log('Study session completion modal shown', { hours, xp, coins });
 }
 
 // stop active study session (wrapper)
@@ -1687,6 +1828,7 @@ function getCsrfToken() {
   }
   return '';
 }
+
 // Show Level Up Animation
 function showLevelUpAnimation() {
   const avatar = document.getElementById('avatar');
@@ -1697,3 +1839,7 @@ function showLevelUpAnimation() {
     }, 2000);
   }
 }
+
+// Make functions available globally
+window.togglePendingItem = togglePendingItem;
+window.confirmPendingItems = confirmPendingItems;

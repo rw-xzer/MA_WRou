@@ -7,7 +7,7 @@ let dailyChart = null;
 let subjectChart = null;
 let statsData = null;
 let colorLegend = {};
-let currentWeekDayIndex = 0; // For weekly view day navigation
+let currentWeekOffset = 0; // For weekly view week navigation, 0 = current week
 let allWeekDays = []; // Store week days for navigation
 
 // Initialize the stats page
@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   setupEventListeners();
-  // Set initial active button style (without loading stats yet)
+  // Set initial active button style
   currentView = 'monthly';
   document.querySelectorAll('.view-toggle').forEach(btn => {
     if (btn.dataset.view === 'monthly') {
@@ -95,7 +95,7 @@ function setupEventListeners() {
     console.error('Tag button not found');
   }
 
-  // Day navigation buttons (for weekly view)
+  // Day navigation buttons
   const prevDayBtn = document.getElementById('prevDayBtn');
   const nextDayBtn = document.getElementById('nextDayBtn');
   if (prevDayBtn) {
@@ -129,18 +129,28 @@ function switchView(view) {
     }
   });
 
-  // Show/hide day navigation
+  // Show/hide day navigation and week summary
   const dayNav = document.getElementById('dayNavigation');
+  const weekSummary = document.getElementById('weekSummaryStats');
+  
   if (dayNav) {
-    if (view === 'weekly') {
-      dayNav.classList.remove('hidden');
-      // Reset to first day when switching to weekly
-      currentWeekDayIndex = 0;
-    } else {
+      if (view === 'weekly') {
+        dayNav.classList.remove('hidden');
+        currentWeekOffset = 0;
+        allWeekDays = [];
+      } else {
       dayNav.classList.add('hidden');
     }
   }
-
+  
+  if (weekSummary) {
+    if (view === 'weekly') {
+      weekSummary.classList.remove('hidden');
+    } else {
+      weekSummary.classList.add('hidden');
+    }
+  }
+  
   loadStats(view);
 }
 
@@ -148,7 +158,10 @@ function switchView(view) {
 async function loadStats(viewType) {
   try {
     console.log('Loading stats for view type:', viewType);
-    const response = await fetch(`${API_BASE}/api/study/stats/?type=${viewType}`);
+    const url = viewType === 'weekly' 
+      ? `${API_BASE}/api/study/stats/?type=${viewType}&week_offset=${currentWeekOffset}`
+      : `${API_BASE}/api/study/stats/?type=${viewType}`;
+    const response = await fetch(url);
     if (!response.ok) {
       console.error('Failed to load stats:', response.status);
       const errorText = await response.text();
@@ -159,9 +172,34 @@ async function loadStats(viewType) {
     colorLegend = statsData.color_legend || {};
     console.log('Loaded color legend:', colorLegend);
     console.log('Stats data:', statsData);
+    console.log('By day data:', statsData.by_day);
 
     updateTotalHours(statsData.total_hours || 0);
     updateColorLegend();
+    
+    // For weekly view, update week summary stats
+    if (viewType === 'weekly') {
+      updateWeekSummaryStats(statsData);
+    }
+    
+    // For weekly view, if current week has no data, find most recent week with data
+    if (viewType === 'weekly') {
+      const byDay = statsData.by_day || {};
+      const byDayKeys = Object.keys(byDay);
+      
+      if (byDayKeys.length === 0) {
+        // Current week has no data - try to find most recent week with data
+        // We'll need to fetch monthly data to find dates with data
+        // For now, just use current week and let user navigate with date picker
+        console.log('No data in current week. Use date picker to navigate to weeks with data.');
+        allWeekDays = [];
+      } else {
+        // Has data - use the dates from the response
+        // The week calculation will happen in renderWeeklyDailyChart
+        allWeekDays = [];
+      }
+    }
+    
     renderDailyChart();
     renderSubjectChart();
   } catch (error) {
@@ -176,6 +214,157 @@ function updateTotalHours(hours) {
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   totalHoursEl.textContent = `${h}h ${m}m`;
+}
+
+// Update week summary stats
+function updateWeekSummaryStats(data) {
+  const container = document.getElementById('weekStatsContent');
+  if (!container) return;
+  
+  const byDay = data.by_day || {};
+  const bySubject = data.by_subject || {};
+  const totalHours = data.total_hours || 0;
+  
+  // Calculate stats
+  const allSessions = [];
+  Object.keys(byDay).forEach(dayStr => {
+    const dayData = byDay[dayStr];
+    if (dayData.sessions) {
+      allSessions.push(...dayData.sessions);
+    }
+  });
+  
+  const totalSessions = allSessions.length;
+  const daysWithSessions = Object.keys(byDay).length;
+  const avgHoursPerDay = daysWithSessions > 0 ? (totalHours / daysWithSessions).toFixed(1) : 0;
+  
+  // Find longest session
+  let longestSession = null;
+  let longestDuration = 0;
+  allSessions.forEach(session => {
+    const duration = session.duration_minutes || 0;
+    if (duration > longestDuration) {
+      longestDuration = duration;
+      longestSession = session;
+    }
+  });
+  
+  // Find most studied subject
+  let mostStudiedSubject = null;
+  let mostStudiedHours = 0;
+  Object.keys(bySubject).forEach(subject => {
+    const hours = bySubject[subject] || 0;
+    if (hours > mostStudiedHours) {
+      mostStudiedHours = hours;
+      mostStudiedSubject = subject;
+    }
+  });
+  
+  // Calculate subject breakdown
+  const subjectBreakdown = Object.keys(bySubject)
+    .map(subject => ({
+      subject,
+      hours: bySubject[subject] || 0
+    }))
+    .sort((a, b) => b.hours - a.hours);
+  
+  let html = '';
+  
+  // Total hours
+  const totalH = Math.floor(totalHours);
+  const totalM = Math.round((totalHours - totalH) * 60);
+  html += `
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <div class="text-xs text-gray-600">Total Hours</div>
+      <div class="text-xl font-bold">${totalH}h ${totalM}m</div>
+    </div>
+  `;
+  
+  // Total sessions
+  html += `
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+      <div class="text-xs text-gray-600">Sessions</div>
+      <div class="text-lg font-bold">${totalSessions}</div>
+    </div>
+  `;
+  
+  // Days with sessions
+  html += `
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+      <div class="text-xs text-gray-600">Active Days</div>
+      <div class="text-lg font-bold">${daysWithSessions}/7</div>
+    </div>
+  `;
+  
+  // Average hours per day
+  html += `
+    <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+      <div class="text-xs text-gray-600">Avg/Day</div>
+      <div class="text-lg font-bold">${avgHoursPerDay}h</div>
+    </div>
+  `;
+  
+  // Most studied subject
+  if (mostStudiedSubject) {
+    const msh = Math.floor(mostStudiedHours);
+    const msm = Math.round((mostStudiedHours - msh) * 60);
+    html += `
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+        <div class="text-xs text-gray-600">Most Studied</div>
+        <div class="text-sm font-bold truncate" title="${mostStudiedSubject}">${mostStudiedSubject}</div>
+        <div class="text-xs text-gray-500">${msh}h ${msm}m</div>
+      </div>
+    `;
+  }
+  
+  // Longest session
+  if (longestSession) {
+    const lh = Math.floor(longestDuration / 60);
+    const lm = longestDuration % 60;
+    html += `
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+        <div class="text-xs text-gray-600">Longest</div>
+        <div class="text-sm font-bold truncate" title="${longestSession.subject}">${longestSession.subject}</div>
+        <div class="text-xs text-gray-500">${lh}h ${lm}m</div>
+      </div>
+    `;
+  }
+  
+  // Subject breakdown - spans both columns
+  if (subjectBreakdown.length > 0) {
+    html += `
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+        <div class="mb-1.5 text-xs font-semibold text-gray-700">By Subject</div>
+        <div class="space-y-1">
+    `;
+    
+    subjectBreakdown.forEach(({ subject, hours }) => {
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      const percentage = totalHours > 0 ? Math.round((hours / totalHours) * 100) : 0;
+      const color = colorLegend[subject] || '#3b82f6';
+      
+      html += `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div class="h-2.5 w-2.5 rounded-full flex-shrink-0" style="background-color: ${color}"></div>
+            <span class="text-xs truncate">${subject}</span>
+          </div>
+          <div class="text-right flex-shrink-0 ml-2">
+            <div class="text-xs font-medium">${h}h ${m}m</div>
+            <div class="text-[10px] text-gray-500">${percentage}%</div>
+          </div>
+        </div>
+      `;
+    });
+    
+    html += `
+        </div>
+      </div>
+    `;
+  }
+  
+  container.innerHTML = html;
 }
 
 // Update color legend
@@ -211,6 +400,8 @@ function updateColorLegend() {
 // Render daily study chart
 function renderDailyChart() {
   const ctx = document.getElementById('dailyChart').getContext('2d');
+  const container = document.getElementById('dailyChartContainer');
+  const chartWrapper = document.getElementById('dailyChartWrapper');
 
   if (dailyChart) {
     dailyChart.destroy();
@@ -220,9 +411,25 @@ function renderDailyChart() {
 
   if (currentView === 'monthly') {
     titleEl.textContent = 'Daily Study Hours (Monthly)';
+    // Set height for monthly view to accommodate all days
+    if (container) {
+      container.style.height = '800px';
+    }
+    // Reset wrapper width for monthly view
+    if (chartWrapper) {
+      chartWrapper.classList.remove('w-32');
+      chartWrapper.classList.add('flex-1');
+    }
     renderMonthlyDailyChart(ctx);
   } else {
     titleEl.textContent = 'Daily Study Hours (Weekly)';
+    if (chartWrapper) {
+      chartWrapper.classList.remove('flex-1');
+      chartWrapper.classList.add('flex-1');
+    }
+    if (container) {
+      container.style.height = '700px';
+    }
     renderWeeklyDailyChart(ctx);
   }
 }
@@ -264,7 +471,7 @@ function renderMonthlyDailyChart(ctx) {
     }
   }
 
-  // Create dataset for each subject (only if they have data or are in color legend)
+  // Create dataset for each subject
   Object.keys(subjectTotals).forEach(subject => {
     datasets.push({
       label: subject,
@@ -284,10 +491,15 @@ function renderMonthlyDailyChart(ctx) {
     return total;
   });
 
+  // Format labels as dates
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthName = monthNames[month - 1];
+  const labels = allDays.map(d => `${monthName} ${d}`);
+
   dailyChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: allDays.map(d => `Day ${d}`),
+      labels: labels,
       datasets: datasets,
     },
     options: {
@@ -323,6 +535,11 @@ function renderMonthlyDailyChart(ctx) {
             display: true,
             text: 'Day of Month',
           },
+          ticks: {
+            autoSkip: false, // Show all labels
+            maxRotation: 0, // Keep labels horizontal
+            minRotation: 0,
+          },
         },
       },
       onClick: (event, elements) => {
@@ -340,121 +557,112 @@ function renderMonthlyDailyChart(ctx) {
   });
 }
 
-// Navigate to previous/next day in weekly view
+// Navigate to previous/next week in weekly view
 function navigateWeekDay(direction) {
-  currentWeekDayIndex += direction;
-  if (currentWeekDayIndex < 0) {
-    currentWeekDayIndex = 6;
-  } else if (currentWeekDayIndex > 6) {
-    currentWeekDayIndex = 0;
-  }
+  currentWeekOffset += direction;
+  allWeekDays = [];
   updateDayLabel();
-  renderDailyChart();
+  loadStats('weekly');
 }
 
-// Update the current day label
+// Update the current week label
 function updateDayLabel() {
   const dayLabel = document.getElementById('currentDayLabel');
-  if (dayLabel && allWeekDays.length > 0) {
-    const dayStr = allWeekDays[currentWeekDayIndex];
-    const date = new Date(dayStr);
+  if (dayLabel) {
+    const now = new Date();
+    const daysSinceMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const startOfCurrentWeek = new Date(now);
+    startOfCurrentWeek.setDate(now.getDate() - daysSinceMonday);
+    startOfCurrentWeek.setHours(0, 0, 0, 0);
+    
+    const startOfWeek = new Date(startOfCurrentWeek);
+    startOfWeek.setDate(startOfCurrentWeek.getDate() + (currentWeekOffset * 7));
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const dayName = dayNames[date.getDay() === 0 ? 6 : date.getDay() - 1];
-    const dayNum = date.getDate();
-    dayLabel.textContent = `${dayName} ${dayNum}`;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const startDayName = dayNames[0];
+    const startDayNum = startOfWeek.getDate();
+    const startMonthName = monthNames[startOfWeek.getMonth()];
+    
+    const endDayName = dayNames[6];
+    const endDayNum = endOfWeek.getDate();
+    const endMonthName = monthNames[endOfWeek.getMonth()];
+    
+    const labelText = `${startDayName} ${startDayNum} ${startMonthName} - ${endDayName} ${endDayNum} ${endMonthName}`;
+    dayLabel.textContent = labelText;
+    dayLabel.style.minWidth = '200px';
   }
 }
 
-// Render weekly daily chart (timetable style)
+// Render weekly daily chart - timetable style showing session times
 function renderWeeklyDailyChart(ctx) {
   const byDay = statsData.by_day || {};
 
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const datasets = [];
+  if (allWeekDays.length === 0) {
+    const now = new Date();
+    const daysSinceMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const startOfCurrentWeek = new Date(now);
+    startOfCurrentWeek.setDate(now.getDate() - daysSinceMonday);
+    startOfCurrentWeek.setHours(0, 0, 0, 0);
+    
+    const startOfWeek = new Date(startOfCurrentWeek);
+    startOfWeek.setDate(startOfCurrentWeek.getDate() + (currentWeekOffset * 7));
 
-  // Get all 7 days of the week
-  const now = new Date();
-  const daysSinceMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - daysSinceMonday);
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  allWeekDays = [];
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(startOfWeek);
-    day.setDate(startOfWeek.getDate() + i);
-    allWeekDays.push(day.toISOString().split('T')[0]);
+    allWeekDays = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + i);
+      const year = day.getFullYear();
+      const month = String(day.getMonth() + 1).padStart(2, '0');
+      const date = String(day.getDate()).padStart(2, '0');
+      allWeekDays.push(`${year}-${month}-${date}`);
+    }
   }
 
-  // Update day label
   updateDayLabel();
 
-  // Get the selected day
-  const selectedDayStr = allWeekDays[currentWeekDayIndex];
-  const selectedDayData = byDay[selectedDayStr] || {};
-  
-  // Store for use in tooltip callbacks
-  window.selectedDayStr = selectedDayStr;
-  window.selectedDayData = selectedDayData;
-
-  // Prepare session data for scatter chart (only for selected day)
-  const sessionPoints = [];
-
-  if (selectedDayData.sessions) {
-    selectedDayData.sessions.forEach(session => {
-      const startTime = new Date(session.start_time);
-      const hour = startTime.getHours();
-      const minutes = startTime.getMinutes();
-      const timeInHours = hour + minutes / 60;
-
-      // Create a point for the start of the session
-      sessionPoints.push({
-        x: 0, // All points on same day, so x = 0
-        y: timeInHours,
-        duration: (session.duration_minutes || 0) / 60,
-        subject: session.subject,
-        color: session.color || colorLegend[session.subject] || '#3b82f6',
-        startTime: session.start_time,
-        durationMinutes: session.duration_minutes || 0
-      });
-    });
-  }
-
-  // Group sessions by subject for different datasets
-  const sessionsBySubject = {};
-  sessionPoints.forEach(point => {
-    if (!sessionsBySubject[point.subject]) {
-      sessionsBySubject[point.subject] = [];
-    }
-    sessionsBySubject[point.subject].push({
-      x: point.x,
-      y: point.y,
-      duration: point.duration,
-      color: point.color,
-      startTime: point.startTime,
-      durationMinutes: point.durationMinutes
-    });
+  const dayLabels = allWeekDays.map((dayStr) => {
+    const date = new Date(dayStr + 'T00:00:00');
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayName = dayNames[date.getDay() === 0 ? 6 : date.getDay() - 1];
+    return dayName;
   });
 
-  // Create datasets for each subject
-  Object.keys(sessionsBySubject).forEach(subject => {
-    const sessions = sessionsBySubject[subject];
-    datasets.push({
-      label: subject,
-      data: sessions.map(s => ({ x: s.x, y: s.y })),
-      backgroundColor: colorLegend[subject] || '#3b82f6',
-      borderColor: colorLegend[subject] || '#3b82f6',
-      pointRadius: 8,
-      pointHoverRadius: 10,
-      pointStyle: 'circle',
-      showLine: false,
-    });
+  const datasets = [];
+  const sessionData = [];
+
+  allWeekDays.forEach((dayStr, dayIndex) => {
+    const dayData = byDay[dayStr] || {};
+    if (dayData.sessions && dayData.sessions.length > 0) {
+      dayData.sessions.forEach(session => {
+        const startTime = new Date(session.start_time);
+        const hour = startTime.getHours();
+        const minutes = startTime.getMinutes();
+        const startTimeInHours = hour + minutes / 60;
+        const durationHours = (session.duration_minutes || 0) / 60;
+
+        sessionData.push({
+          x: dayIndex,
+          y: startTimeInHours,
+          width: 0.6,
+          height: durationHours,
+          subject: session.subject,
+          color: session.color || colorLegend[session.subject] || '#3b82f6',
+          startTime: session.start_time,
+          durationMinutes: session.duration_minutes || 0,
+        });
+      });
+    }
   });
 
   dailyChart = new Chart(ctx, {
     type: 'scatter',
     data: {
-      datasets: datasets,
+      datasets: [],
     },
     options: {
       responsive: true,
@@ -464,79 +672,87 @@ function renderWeeklyDailyChart(ctx) {
           display: false,
         },
         tooltip: {
-          callbacks: {
-            title: function(context) {
-              const dayStr = window.selectedDayStr || allWeekDays[currentWeekDayIndex];
-              const date = new Date(dayStr);
-              const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-              const dayName = dayNames[date.getDay() === 0 ? 6 : date.getDay() - 1];
-              const dayNum = date.getDate();
-              return `${dayName} ${dayNum}`;
-            },
-            label: function(context) {
-              const point = context.raw;
-              const hour = Math.floor(point.y);
-              const minutes = Math.round((point.y - hour) * 60);
-              const timeStr = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-              
-              // Find the session to get duration
-              const dayData = window.selectedDayData || {};
-              let durationStr = '';
-              if (dayData.sessions) {
-                const session = dayData.sessions.find(s => {
-                  const startTime = new Date(s.start_time);
-                  const sHour = startTime.getHours();
-                  const sMinutes = startTime.getMinutes();
-                  const sTimeInHours = sHour + sMinutes / 60;
-                  return Math.abs(sTimeInHours - point.y) < 0.1;
-                });
-                if (session) {
-                  const durHours = Math.floor(session.duration_minutes / 60);
-                  const durMins = session.duration_minutes % 60;
-                  durationStr = ` - ${durHours}h ${durMins}m`;
-                }
-              }
-              
-              return `${context.dataset.label} at ${timeStr}${durationStr}`;
-            },
-          },
+          enabled: false,
         },
+      },
+      onHover: (event, elements) => {
+        const canvas = event.native.target;
+        const x = event.native.offsetX;
+        const y = event.native.offsetY;
+        
+        const xScale = dailyChart.scales.x;
+        const yScale = dailyChart.scales.y;
+        const dayIndex = Math.round(xScale.getValueForPixel(x));
+        const timeValue = yScale.getValueForPixel(y);
+        
+        const hoveredSession = sessionData.find(s => {
+          const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
+          const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
+          return dayMatch && timeMatch;
+        });
+        
+        if (hoveredSession) {
+          canvas.style.cursor = 'pointer';
+        } else {
+          canvas.style.cursor = 'default';
+        }
       },
       scales: {
         x: {
-          type: 'linear',
-          position: 'bottom',
           min: -0.5,
-          max: 0.5,
-          ticks: {
-            display: false,
-          },
+          max: 6.5,
           title: {
-            display: false,
+            display: true,
+            text: 'Day',
+          },
+          ticks: {
+            stepSize: 1,
+            callback: function(value, index) {
+              return '';
+            },
+          },
+          grid: {
+            offset: false,
+            drawOnChartArea: true,
           },
         },
         y: {
-          type: 'linear',
+          reverse: true,
           min: 0,
           max: 24,
-          reverse: false,
-          ticks: {
-            stepSize: 1,
-            callback: function(value) {
-              return `${value.toString().padStart(2, '0')}:00`;
-            },
-          },
           title: {
             display: true,
             text: 'Time',
           },
+          ticks: {
+            stepSize: 1,
+            callback: function(value) {
+              return `${String(Math.floor(value)).padStart(2, '0')}:00`;
+            },
+          },
         },
       },
-      onClick: (event, elements) => {
-        if (elements.length > 0 && currentView === 'weekly') {
-          const dayStr = window.selectedDayStr || allWeekDays[currentWeekDayIndex];
-          const dayData = window.selectedDayData || {};
-          if (dayStr) {
+      onClick: (event) => {
+        if (currentView === 'weekly') {
+          const canvas = event.native.target;
+          const rect = canvas.getBoundingClientRect();
+          const x = event.native.offsetX;
+          const y = event.native.offsetY;
+          
+          const xScale = dailyChart.scales.x;
+          const yScale = dailyChart.scales.y;
+          const dayIndex = Math.round(xScale.getValueForPixel(x));
+          const timeValue = yScale.getValueForPixel(y);
+          
+          const clickedSession = sessionData.find(s => {
+            const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
+            const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
+            return dayMatch && timeMatch;
+          });
+          
+          if (clickedSession) {
+            const dayStr = allWeekDays[dayIndex];
+            const dayData = byDay[dayStr] || {};
             let totalHours = 0;
             if (dayData.subjects) {
               Object.values(dayData.subjects).forEach(hours => {
@@ -547,10 +763,147 @@ function renderWeeklyDailyChart(ctx) {
           }
         }
       },
-      onHover: (event, elements) => {
-        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
-      },
     },
+    plugins: [{
+      id: 'drawSessionBars',
+      afterDraw: (chart) => {
+        const ctx = chart.ctx;
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        
+        sessionData.forEach(session => {
+          const x = xScale.getPixelForValue(session.x);
+          const yStart = yScale.getPixelForValue(session.y);
+          const yEnd = yScale.getPixelForValue(session.y + session.height);
+          
+          const barWidth = 30;
+          const barHeight = yStart - yEnd;
+          
+          ctx.save();
+          ctx.fillStyle = session.color;
+          ctx.strokeStyle = session.color;
+          ctx.lineWidth = 1;
+          ctx.fillRect(x - barWidth / 2, yEnd, barWidth, barHeight);
+          ctx.strokeRect(x - barWidth / 2, yEnd, barWidth, barHeight);
+          ctx.restore();
+        });
+        
+        // Draw day labels at bar positions (centers)
+        dayLabels.forEach((label, index) => {
+          const x = xScale.getPixelForValue(index);
+          const y = yScale.bottom;
+          ctx.save();
+          ctx.fillStyle = '#666';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(label, x, y + 5);
+          ctx.restore();
+        });
+      },
+      afterEvent: (chart, args) => {
+        if (!args.event || !args.event.native) return;
+        
+        let tooltipEl = document.getElementById('sessionTooltip');
+        if (!tooltipEl) {
+          tooltipEl = document.createElement('div');
+          tooltipEl.id = 'sessionTooltip';
+          tooltipEl.style.cssText = 'position: fixed; background: rgba(0, 0, 0, 0.85); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 10000; display: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+          document.body.appendChild(tooltipEl);
+        }
+        
+        const eventType = args.event.type || args.event.native.type;
+        
+        if (eventType === 'mousemove') {
+          const canvas = chart.canvas;
+          const rect = canvas.getBoundingClientRect();
+          const x = args.event.native.offsetX || (args.event.native.clientX - rect.left);
+          const y = args.event.native.offsetY || (args.event.native.clientY - rect.top);
+          
+          const xScale = chart.scales.x;
+          const yScale = chart.scales.y;
+          const dayIndex = Math.round(xScale.getValueForPixel(x));
+          const timeValue = yScale.getValueForPixel(y);
+          
+          const session = sessionData.find(s => {
+            const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
+            const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
+            return dayMatch && timeMatch;
+          });
+          
+          if (session) {
+            const startTime = new Date(session.startTime);
+            const hours = startTime.getHours();
+            const minutes = startTime.getMinutes();
+            const h = Math.floor(session.durationMinutes / 60);
+            const m = session.durationMinutes % 60;
+            const startTimeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            
+            tooltipEl.innerHTML = `<div style="font-weight: bold; margin-bottom: 4px;">${session.subject}</div><div>Start: ${startTimeStr}</div><div>Duration: ${h}h ${m}m</div>`;
+            tooltipEl.style.display = 'block';
+            tooltipEl.style.left = (args.event.native.clientX + 15) + 'px';
+            tooltipEl.style.top = (args.event.native.clientY - 10) + 'px';
+            canvas.style.cursor = 'pointer';
+          } else {
+            tooltipEl.style.display = 'none';
+            canvas.style.cursor = 'default';
+          }
+        } else if (eventType === 'mouseout') {
+          tooltipEl.style.display = 'none';
+        }
+      },
+    }],
+  });
+  
+  // Attach mousemove event directly to canvas for tooltip
+  const canvas = ctx.canvas;
+  let tooltipEl = document.getElementById('sessionTooltip');
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div');
+    tooltipEl.id = 'sessionTooltip';
+    tooltipEl.style.cssText = 'position: fixed; background: rgba(0, 0, 0, 0.85); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 10000; display: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+    document.body.appendChild(tooltipEl);
+  }
+  
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.offsetX;
+    const y = e.offsetY;
+    
+    const xScale = dailyChart.scales.x;
+    const yScale = dailyChart.scales.y;
+    const dayIndex = Math.round(xScale.getValueForPixel(x));
+    const timeValue = yScale.getValueForPixel(y);
+    
+    const session = sessionData.find(s => {
+      const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
+      const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
+      return dayMatch && timeMatch;
+    });
+    
+    if (session) {
+      const startTime = new Date(session.startTime);
+      const hours = startTime.getHours();
+      const minutes = startTime.getMinutes();
+      const h = Math.floor(session.durationMinutes / 60);
+      const m = session.durationMinutes % 60;
+      const startTimeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      
+      tooltipEl.innerHTML = `<div style="font-weight: bold; margin-bottom: 4px;">${session.subject}</div><div>Start: ${startTimeStr}</div><div>Duration: ${h}h ${m}m</div>`;
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.left = (e.clientX + 15) + 'px';
+      tooltipEl.style.top = (e.clientY - 10) + 'px';
+      canvas.style.cursor = 'pointer';
+    } else {
+      tooltipEl.style.display = 'none';
+      canvas.style.cursor = 'default';
+    }
+  });
+  
+  canvas.addEventListener('mouseout', () => {
+    if (tooltipEl) {
+      tooltipEl.style.display = 'none';
+    }
   });
 }
 
@@ -573,7 +926,7 @@ function renderSubjectChart() {
     }
   });
   
-  // Sort by hours (descending), but include all subjects
+  // Sort by hours descending
   const subjects = Object.keys(bySubject).sort((a, b) => bySubject[b] - bySubject[a]);
   const data = subjects.map(s => bySubject[s]);
   const colors = subjects.map(s => colorLegend[s] || '#3b82f6');
@@ -627,7 +980,7 @@ function renderSubjectChart() {
   });
 }
 
-// Show day details modal (for weekly view)
+// Show day details modal
 function showDayDetails(dayStr, totalHours) {
   if (currentView !== 'weekly') {
     return;
@@ -682,7 +1035,7 @@ function showDayDetails(dayStr, totalHours) {
   document.getElementById('dayDetailsModal').classList.remove('hidden');
 }
 
-// Store original subject names for renaming (maps new_name -> old_name)
+// Store original subject names for renaming
 let subjectRenames = {};
 
 // Show color organization modal
@@ -709,14 +1062,14 @@ function showColorOrganizationModal() {
   console.log('Subjects in color legend:', subjects);
   
   subjects.forEach(subject => {
-    // Track original name (if not already tracked, assume it's the same)
+    // Track original name
     if (!(subject in subjectRenames)) {
       subjectRenames[subject] = subject;
     }
     const item = document.createElement('div');
     item.className = 'flex items-center gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50';
     
-    // Color circle (clickable)
+    // Color circle
     const colorCircle = document.createElement('button');
     colorCircle.type = 'button';
     colorCircle.className = 'h-8 w-8 rounded-full border-2 border-gray-300 hover:scale-110 transition-transform flex-shrink-0';
@@ -727,7 +1080,7 @@ function showColorOrganizationModal() {
       showColorPickerForSubject(subject);
     });
     
-    // Subject name (clickable to rename)
+    // Subject name
     const subjectName = document.createElement('div');
     subjectName.className = 'flex-1 cursor-pointer px-2 py-1 rounded hover:bg-gray-100';
     subjectName.textContent = subject;
@@ -871,7 +1224,7 @@ function renameSubject(oldName) {
       alert('A subject with this name already exists!');
       return;
     }
-    // Track the rename (map new name to original name)
+    // Track the rename
     const originalName = subjectRenames[oldName] || oldName;
     subjectRenames[trimmedName] = originalName;
     delete subjectRenames[oldName];
@@ -1005,7 +1358,7 @@ function updateColorPickerSelection(subject, color) {
 // Save color organization
 async function saveColorOrganization() {
   try {
-    // Filter out renames where old === new (no actual rename happened)
+    // Filter out renames where old equals new
     const actualRenames = {};
     Object.keys(subjectRenames).forEach(newName => {
       const oldName = subjectRenames[newName];
@@ -1053,6 +1406,49 @@ function closeModal(modalId) {
   }
 }
 
+// Show date picker modal
+function showDatePicker() {
+  const modal = document.getElementById('datePickerModal');
+  const input = document.getElementById('datePickerInput');
+  if (modal && input && allWeekDays.length > 0) {
+    const startOfWeek = allWeekDays[0];
+    input.value = startOfWeek;
+    modal.classList.remove('hidden');
+  }
+}
+
+// Apply date picker selection
+function applyDatePicker() {
+  const input = document.getElementById('datePickerInput');
+  if (!input || !input.value) return;
+  
+  const selectedDate = input.value;
+  const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+  const now = new Date();
+  const daysSinceMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const startOfCurrentWeek = new Date(now);
+  startOfCurrentWeek.setDate(now.getDate() - daysSinceMonday);
+  startOfCurrentWeek.setHours(0, 0, 0, 0);
+  
+  const selectedDaysSinceMonday = selectedDateObj.getDay() === 0 ? 6 : selectedDateObj.getDay() - 1;
+  const startOfSelectedWeek = new Date(selectedDateObj);
+  startOfSelectedWeek.setDate(selectedDateObj.getDate() - selectedDaysSinceMonday);
+  startOfSelectedWeek.setHours(0, 0, 0, 0);
+  
+  const diffTime = startOfSelectedWeek - startOfCurrentWeek;
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  currentWeekOffset = Math.floor(diffDays / 7);
+  
+  allWeekDays = [];
+  closeModal('datePickerModal');
+  updateDayLabel();
+  loadStats('weekly');
+}
+
+// Make functions globally accessible
+window.showDatePicker = showDatePicker;
+window.applyDatePicker = applyDatePicker;
+
 // Get CSRF token from cookies
 function getCsrfToken() {
   const cookies = document.cookie.split(';');
@@ -1068,4 +1464,5 @@ function getCsrfToken() {
 // Expose functions globally
 window.saveColorOrganization = saveColorOrganization;
 window.closeModal = closeModal;
+window.showColorOrganizationModal = showColorOrganizationModal;
 window.showColorOrganizationModal = showColorOrganizationModal;

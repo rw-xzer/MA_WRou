@@ -39,18 +39,30 @@
     <!-- Left: Charts -->
     <div class="flex flex-1 flex-col overflow-y-auto p-6">
       <!-- Daily Study Chart -->
-      <div class="mb-6 rounded-lg border border-gray-300 bg-white p-6">
-        <div class="mb-4 flex items-center justify-between">
+      <div class="mb-6">
+        <!-- Title and Navigation (spans both graph and stats in weekly view) -->
+        <div class="mb-4 flex items-center justify-between rounded-lg border border-gray-300 bg-white p-4">
           <h2 class="text-xl font-semibold" id="dailyChartTitle"> Daily Study Hours</h2>
           <!-- Day Navigation (only visible in weekly view) -->
           <div id="dayNavigation" class="hidden flex items-center gap-2">
-            <button id="prevDayBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">← Prev</button>
-            <span id="currentDayLabel" class="px-4 text-sm font-medium">Mon 1</span>
-            <button id="nextDayBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">Next →</button>
+            <button id="prevDayBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">← Prev Week</button>
+            <span id="currentDayLabel" class="px-4 text-sm font-medium cursor-pointer hover:text-blue-600 hover:underline min-w-[200px] text-center" onclick="showDatePicker()">Mon 29 Dec - Sun 4 Jan</span>
+            <button id="nextDayBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">Next Week →</button>
           </div>
         </div>
-        <div class="relative h-96">
-          <canvas id="dailyChart"></canvas>
+        <div class="flex gap-4">
+          <div id="dailyChartWrapper" class="rounded-lg border border-gray-300 bg-white p-6">
+            <div class="relative" id="dailyChartContainer" style="height: 800px;">
+              <canvas id="dailyChart"></canvas>
+            </div>
+          </div>
+          <!-- Week Summary Stats (only visible in weekly view) -->
+          <div id="weekSummaryStats" class="hidden flex-1 rounded-lg border border-gray-300 bg-white p-6">
+            <h3 class="mb-4 text-lg font-semibold">Week Summary</h3>
+            <div id="weekStatsContent" class="space-y-3">
+              <!-- Stats will be populated here -->
+            </div>
+          </div>
         </div>
       </div>
 
@@ -99,6 +111,20 @@
     </div>
     <div class="flex gap-2">
       <button type="button" onclick="closeModal('colorPickerModal')" class="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Date Picker Modal -->
+<div id="datePickerModal" class="modal bg-opacity-50 fixed inset-0 z-50 flex hidden items-center justify-center overflow-y-auto bg-black py-4">
+  <div class="my-auto max-h-[90vh] w-[400px] overflow-y-auto rounded-lg bg-white p-6">
+    <h3 class="mb-4 text-xl font-bold">Select Date</h3>
+    <div class="mb-4">
+      <input type="date" id="datePickerInput" class="w-full rounded border border-gray-300 px-3 py-2" />
+    </div>
+    <div class="flex gap-2">
+      <button type="button" onclick="closeModal('datePickerModal')" class="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50">Cancel</button>
+      <button type="button" onclick="applyDatePicker()" class="flex-1 rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600">Go</button>
     </div>
   </div>
 </div>

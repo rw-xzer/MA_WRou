@@ -196,8 +196,16 @@ class Habit(models.Model):
       return interpolate_hsl('#44b8c7', '#2396b4', t)
     
   def strong(self):
-    """Check if habit is strong"""
-    return self.pos_count > self.neg_count * 2
+    """Check if habit is strong (pos_count / neg_count > 3)"""
+    if self.neg_count == 0:
+      return self.pos_count > 0
+    return self.pos_count > self.neg_count * 3
+  
+  def weak(self):
+    """Check if habit is weak (neg_count / pos_count > 1)"""
+    if self.pos_count == 0:
+      return self.neg_count > 0
+    return self.neg_count > self.pos_count
   
   def incr_neg(self):
     """Increment negative counter"""

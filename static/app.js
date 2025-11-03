@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   checkDailies();
   loadStatSlots();
   setupEventListeners();
+  updateHabitFilters();
   initializeColorPicker();
   loadSubjectColors();
   setupStudySubjectAutoColor();
@@ -103,6 +104,14 @@ function setupEventListeners() {
       taskFilter = e.target.dataset.filter;
       updateTaskFilters();
       loadTasks();
+    });
+  });
+
+  document.querySelectorAll('.habit-filter').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      habitFilter = e.target.dataset.filter;
+      updateHabitFilters();
+      loadHabits();
     });
   });
 

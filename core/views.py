@@ -107,7 +107,7 @@ def api_habits(request):
     habits = habits.filter(tags__name=tag_filter).distinct()
 
   if filter_type == 'weak':
-    habits = [h for h in habits if not h.strong()]
+    habits = [h for h in habits if h.weak()]
   elif filter_type == 'strong':
     habits = [h for h in habits if h.strong()]
 
@@ -1180,9 +1180,10 @@ def api_study_stats(request):
     })
   
   else:
-    # Get current week
+    week_offset = int(request.GET.get('week_offset', 0))
     days_since_monday = now.weekday()
-    start_of_week = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_current_week = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_week = start_of_current_week + timedelta(days=week_offset * 7)
     end_of_week = start_of_week + timedelta(days=7)
 
     sessions = StudySession.objects.filter(
@@ -1192,14 +1193,33 @@ def api_study_stats(request):
       active=False
     )
 
-    # Get color legend for current month
-    year = now.year
-    month = now.month
+    if not sessions.exists() and week_offset == 0:
+      most_recent_session = StudySession.objects.filter(
+        user=request.user,
+        active=False
+      ).order_by('-start_time').first()
+      
+      if most_recent_session:
+        session_date = most_recent_session.start_time
+        days_since_monday = session_date.weekday()
+        start_of_week = (session_date - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_week = start_of_week + timedelta(days=7)
+        
+        sessions = StudySession.objects.filter(
+          user=request.user,
+          start_time__gte=start_of_week,
+          start_time__lt=end_of_week,
+          active=False
+        )
+
+    # Get color legend for current month (use the week's month)
+    week_year = start_of_week.year
+    week_month = start_of_week.month
     color_legend = {}
     subject_colors = SubjectColor.objects.filter(
       user=request.user,
-      year=year,
-      month=month
+      year=week_year,
+      month=week_month
     )
     for sc in subject_colors:
       color_legend[sc.subject] = sc.color

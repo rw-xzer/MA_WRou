@@ -884,7 +884,7 @@ async function checkDailies() {
       }
     }
   } catch (error) {
-    console.error('Error checking dailies;', error);
+    console.error('Error checking dailies:', error);
   }
 }
 

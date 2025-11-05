@@ -478,12 +478,12 @@ def api_stop_study_session(request):
         if level_up:
           profile.avatar_state = 'celebrating'
 
-      five_hour_blocks = int(total_hours_today // 5)
+      hour_blocks = int(total_hours_today)
       previous_total_hours = total_hours_today - hours
-      previous_blocks = int(previous_total_hours // 5)
+      previous_blocks = int(previous_total_hours)
 
-      new_blocks = five_hour_blocks - previous_blocks
-      coins_earned = new_blocks * 5
+      new_blocks = hour_blocks - previous_blocks
+      coins_earned = new_blocks * 1
 
       if coins_earned > 0:
         profile.add_coins(coins_earned)
@@ -528,12 +528,14 @@ def api_complete_habit(request, habit_id):
 
       profile.add_xp(xp)
       
-      # Coins : medium = 1-3, hard = 3-5
+      # Coins : easy = 1-2, medium = 2-4, hard = 4-6
       coins = 0
-      if habit.diff == 'medium':
-        coins = random.randint(1,3)
+      if habit.diff == 'easy':
+        coins = random.randint(1,2)
+      elif habit.diff == 'medium':
+        coins = random.randint(2,4)
       elif habit.diff == 'hard':
-        coins = random.randint(3,5)
+        coins = random.randint(4,6)
       
       if coins > 0:
         profile.add_coins(coins)
@@ -635,12 +637,26 @@ def api_complete_task(request, task_id):
 
           #Delete task log entry
           task_log.delete()
-      
+
       except Exception as e:
         pass
 
       task.completed = False
       task.completed_at = None
+
+      if task.task_type == 'scheduled' and task.due and task.due < timezone.now():
+        hp_loss = 2
+        diff_penalty = {'trivial': 0, 'easy': 1, 'medium': 2, 'hard': 3}[task.diff]
+        hp_loss += diff_penalty
+
+        days_overdue = (timezone.now() - task.due).days
+        weeks_overdue = days_overdue // 7
+        if weeks_overdue > 0:
+          hp_loss = hp_loss * (2 * weeks_overdue)
+
+        profile.lose_health(hp_loss)
+        profile.save()
+
       task.save()
       return JsonResponse({
         'success': True,
@@ -711,23 +727,55 @@ def api_check_dailies(request):
   today = timezone.now().date()
   yesterday = today - timedelta(days=1)
   
-  pending_dailies = []
+  # Automatically reset dailies at the start of each day
   all_dailies = Task.objects.filter(user=request.user, task_type='daily')
+  for daily in all_dailies:
+    # Skip dailies created today
+    if daily.created_at.date() >= today:
+      continue
+    
+    # Check if this daily was completed yesterday or before
+    needs_reset = False
+    if daily.last_completed:
+      last_completed_date = daily.last_completed.date() if hasattr(daily.last_completed, 'date') else daily.last_completed
+      # If completed yesterday or before, it needs to be reset for today
+      if last_completed_date < today:
+        needs_reset = True
+    elif daily.completed:
+      # If marked as completed but has no last_completed date, reset it
+      needs_reset = True
+    
+    # Reset if needed
+    if needs_reset and daily.completed:
+      daily.completed = False
+      daily.completed_at = None
+      daily.save()
+  
+  pending_dailies = []
 
   for daily in all_dailies:
+    # Skip dailies created today
+    if daily.created_at.date() >= today:
+      continue
+    
+    # Check if daily was completed yesterday
     was_completed_yesterday = False
     if daily.last_completed:
       last_completed_date = daily.last_completed.date() if hasattr(daily.last_completed, 'date') else daily.last_completed
       if last_completed_date == yesterday:
         was_completed_yesterday = True
-        continue
-    if daily.created_at.date() < today:
-      pending_dailies.append({
-        'id': daily.id,
-        'title': daily.title,
-        'completed': daily.completed,
-        'type': 'daily',
-      })
+    
+    # Skip if completed yesterday (user already handled it)
+    if was_completed_yesterday:
+      continue
+    
+    # Include daily if it wasn't completed yesterday
+    pending_dailies.append({
+      'id': daily.id,
+      'title': daily.title,
+      'completed': daily.completed,
+      'type': 'daily',
+    })
     
   yesterday_start = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
   yesterday_end = timezone.make_aware(datetime.combine(yesterday, datetime.max.time()))
@@ -843,31 +891,46 @@ def api_reset_dailies(request):
 def api_last_week_recap(request):
   """Generate last week recap with standout stats algorithm"""
   TESTING_MODE = False  # Set to False for normal operation - shows all placeholder boxes when True
-  prev_week = timezone.now() - timedelta(days=7)
-  prev_week_start = prev_week.replace(hour=0, minute=0, second=0, microsecond=0)
+  
+  now = timezone.now()
+  today = now.date()
+  
+  days_since_monday = today.weekday()
+  most_recent_monday = today - timedelta(days=days_since_monday)
+  
+  last_week_start_date = most_recent_monday - timedelta(days=7)
+  last_week_end_date = last_week_start_date + timedelta(days=6)
+  
+  prev_week_start = timezone.make_aware(datetime.combine(last_week_start_date, datetime.min.time()))
+  prev_week_end = timezone.make_aware(datetime.combine(last_week_end_date, datetime.max.time()))
 
   habits_completed = HabitLog.objects.filter(
     habit__user=request.user,
-    created_at__gte=prev_week_start
+    created_at__gte=prev_week_start,
+    created_at__lte=prev_week_end
   ).count()
 
   tasks_completed = TaskLog.objects.filter(
     task__user=request.user,
-    created_at__gte=prev_week_start
+    created_at__gte=prev_week_start,
+    created_at__lte=prev_week_end
   ).count()
 
   study_sessions = StudySession.objects.filter(
     user=request.user,
     start_time__gte=prev_week_start,
+    start_time__lte=prev_week_end,
     active=False
   )
   total_study_hours = sum(s.duration_minutes or 0 for s in study_sessions) / 60
 
-  missed_dailies = Task.objects.filter(
+  dailies_during_week = Task.objects.filter(
     user=request.user,
     task_type='daily',
-  ).exclude(
-    last_completed__gte=prev_week_start
+    created_at__lte=prev_week_end
+  )
+  missed_dailies = dailies_during_week.exclude(
+    Q(last_completed__gte=prev_week_start) & Q(last_completed__lte=prev_week_end)
   ).count()
 
   # Find standout stats
@@ -892,6 +955,7 @@ def api_last_week_recap(request):
   habit_logs = HabitLog.objects.filter(
     habit__user=request.user,
     created_at__gte=prev_week_start,
+    created_at__lte=prev_week_end,
     positive=True
   ).values('habit__id', 'habit__title').annotate(count=Count('id')).order_by('-count')
 

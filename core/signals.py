@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
-from .models import UserProfile, Habit, Task, Tag
+from .models import UserProfile, Habit, Task, Tag, ShopItem
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
@@ -29,4 +29,13 @@ def create_user_profile(sender, instance, created, **kwargs):
       diff='easy',
       task_type='scheduled',
       due=None
+    )
+
+    reward = ShopItem.objects.create(
+      user=instance,
+      name="play a game",
+      description="A fun reward for completing tasks",
+      item_type='reward',
+      price=10,
+      active=True
     )

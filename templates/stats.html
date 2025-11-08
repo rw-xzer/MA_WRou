@@ -49,6 +49,12 @@
             <span id="currentDayLabel" class="px-4 text-sm font-medium cursor-pointer hover:text-blue-600 hover:underline min-w-[200px] text-center" onclick="showDatePicker()">Mon 29 Dec - Sun 4 Jan</span>
             <button id="nextDayBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">Next Week →</button>
           </div>
+          <!-- Month Navigation (only visible in monthly view) -->
+          <div id="monthNavigation" class="hidden flex items-center gap-2">
+            <button id="prevMonthBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">← Prev Month</button>
+            <span id="currentMonthLabel" class="px-4 text-sm font-medium min-w-[200px] text-center">January 2024</span>
+            <button id="nextMonthBtn" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50">Next Month →</button>
+          </div>
         </div>
         <div class="flex gap-4">
           <div id="dailyChartWrapper" class="rounded-lg border border-gray-300 bg-white p-6">

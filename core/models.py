@@ -47,6 +47,9 @@ class UserProfile(models.Model):
       if self.level > self.highest_level_ever:
         self.highest_level_ever = self.level
 
+      # Log level up
+      LevelLog.objects.create(user=self.user, level=self.level)
+
       return True # Level up occurred
     return False
   
@@ -374,6 +377,12 @@ class TaskLog(models.Model):
   created_at = models.DateTimeField(auto_now_add=True)
   xp_earned = models.IntegerField(default=0)
   coins_earned = models.IntegerField(default=0)
+
+class LevelLog(models.Model):
+  """Log entries for level ups"""
+  user = models.ForeignKey(User, on_delete=models.CASCADE)
+  level = models.IntegerField()
+  created_at = models.DateTimeField(auto_now_add=True)
 
 class StatSlot(models.Model):
   """User custom stat display slots"""

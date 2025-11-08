@@ -8,7 +8,8 @@ let subjectChart = null;
 let statsData = null;
 let colorLegend = {};
 let currentWeekOffset = 0; // For weekly view week navigation, 0 = current week
-let allWeekDays = []; // Store week days for navigation
+let currentMonthOffset = 0; // For monthly view month navigation, 0 = current month
+let allWeekDays = [];
 
 // Initialize the stats page
 document.addEventListener('DOMContentLoaded', async () => {
@@ -30,8 +31,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.classList.add('bg-white', 'text-gray-700');
     }
   });
-  // Load stats
   loadStats('monthly');
+  updateMonthLabel();
 });
 
 // Check for active study session and redirect if found
@@ -95,7 +96,6 @@ function setupEventListeners() {
     console.error('Tag button not found');
   }
 
-  // Day navigation buttons
   const prevDayBtn = document.getElementById('prevDayBtn');
   const nextDayBtn = document.getElementById('nextDayBtn');
   if (prevDayBtn) {
@@ -106,6 +106,19 @@ function setupEventListeners() {
   if (nextDayBtn) {
     nextDayBtn.addEventListener('click', () => {
       navigateWeekDay(1);
+    });
+  }
+
+  const prevMonthBtn = document.getElementById('prevMonthBtn');
+  const nextMonthBtn = document.getElementById('nextMonthBtn');
+  if (prevMonthBtn) {
+    prevMonthBtn.addEventListener('click', () => {
+      navigateMonth(-1);
+    });
+  }
+  if (nextMonthBtn) {
+    nextMonthBtn.addEventListener('click', () => {
+      navigateMonth(1);
     });
   }
 }
@@ -151,6 +164,17 @@ function switchView(view) {
     }
   }
   
+  const monthNav = document.getElementById('monthNavigation');
+  if (monthNav) {
+    if (view === 'monthly') {
+      monthNav.classList.remove('hidden');
+      currentMonthOffset = 0;
+      updateMonthLabel();
+    } else {
+      monthNav.classList.add('hidden');
+    }
+  }
+  
   loadStats(view);
 }
 
@@ -160,7 +184,7 @@ async function loadStats(viewType) {
     console.log('Loading stats for view type:', viewType);
     const url = viewType === 'weekly' 
       ? `${API_BASE}/api/study/stats/?type=${viewType}&week_offset=${currentWeekOffset}`
-      : `${API_BASE}/api/study/stats/?type=${viewType}`;
+      : `${API_BASE}/api/study/stats/?type=${viewType}&month_offset=${currentMonthOffset}`;
     const response = await fetch(url);
     if (!response.ok) {
       console.error('Failed to load stats:', response.status);
@@ -491,10 +515,14 @@ function renderMonthlyDailyChart(ctx) {
     return total;
   });
 
-  // Format labels as dates
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthName = monthNames[month - 1];
-  const labels = allDays.map(d => `${monthName} ${d}`);
+  const currentDate = new Date();
+  const isCurrentMonth = (year === currentDate.getFullYear() && month === currentDate.getMonth() + 1);
+  const labels = allDays.map(d => {
+    const isToday = isCurrentMonth && d === currentDate.getDate();
+    return isToday ? `${monthName} ${d} (Today)` : `${monthName} ${d}`;
+  });
 
   dailyChart = new Chart(ctx, {
     type: 'bar',
@@ -557,7 +585,6 @@ function renderMonthlyDailyChart(ctx) {
   });
 }
 
-// Navigate to previous/next week in weekly view
 function navigateWeekDay(direction) {
   currentWeekOffset += direction;
   allWeekDays = [];
@@ -565,7 +592,29 @@ function navigateWeekDay(direction) {
   loadStats('weekly');
 }
 
-// Update the current week label
+function navigateMonth(direction) {
+  currentMonthOffset += direction;
+  updateMonthLabel();
+  loadStats('monthly');
+}
+
+function updateMonthLabel() {
+  const monthLabel = document.getElementById('currentMonthLabel');
+  if (monthLabel) {
+    const now = new Date();
+    const targetDate = new Date(now.getFullYear(), now.getMonth() + currentMonthOffset, 1);
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = monthNames[targetDate.getMonth()];
+    const year = targetDate.getFullYear();
+    
+    const isCurrentMonth = currentMonthOffset === 0;
+    const indicator = isCurrentMonth ? ' (Current)' : '';
+    
+    monthLabel.textContent = `${monthName} ${year}${indicator}`;
+    monthLabel.style.minWidth = '200px';
+  }
+}
+
 function updateDayLabel() {
   const dayLabel = document.getElementById('currentDayLabel');
   if (dayLabel) {
@@ -592,7 +641,10 @@ function updateDayLabel() {
     const endDayNum = endOfWeek.getDate();
     const endMonthName = monthNames[endOfWeek.getMonth()];
     
-    const labelText = `${startDayName} ${startDayNum} ${startMonthName} - ${endDayName} ${endDayNum} ${endMonthName}`;
+    const isCurrentWeek = currentWeekOffset === 0;
+    const indicator = isCurrentWeek ? ' (Current)' : '';
+    
+    const labelText = `${startDayName} ${startDayNum} ${startMonthName} - ${endDayName} ${endDayNum} ${endMonthName}${indicator}`;
     dayLabel.textContent = labelText;
     dayLabel.style.minWidth = '200px';
   }
@@ -915,19 +967,25 @@ function renderSubjectChart() {
     subjectChart.destroy();
   }
 
-  // Get all subjects from color legend, even if they have 0 hours
-  const allSubjects = Object.keys(colorLegend).sort();
+  // Get subjects from the data (only subjects that appear in this view)
   const bySubject = statsData.by_subject || {};
   
-  // Ensure all subjects from color legend are included, even with 0 hours
-  allSubjects.forEach(subject => {
-    if (!(subject in bySubject)) {
-      bySubject[subject] = 0;
-    }
-  });
-  
-  // Sort by hours descending
-  const subjects = Object.keys(bySubject).sort((a, b) => bySubject[b] - bySubject[a]);
+  // For weekly view, only show subjects that appear in the week
+  // For monthly view, show all subjects from color legend
+  let subjects;
+  if (currentView === 'weekly') {
+    // Only show subjects that have hours in this week
+    subjects = Object.keys(bySubject).filter(s => bySubject[s] > 0).sort((a, b) => bySubject[b] - bySubject[a]);
+  } else {
+    // Monthly view: show all subjects from color legend, even with 0 hours
+    const allSubjects = Object.keys(colorLegend).sort();
+    allSubjects.forEach(subject => {
+      if (!(subject in bySubject)) {
+        bySubject[subject] = 0;
+      }
+    });
+    subjects = Object.keys(bySubject).sort((a, b) => bySubject[b] - bySubject[a]);
+  }
   const data = subjects.map(s => bySubject[s]);
   const colors = subjects.map(s => colorLegend[s] || '#3b82f6');
 
@@ -1039,8 +1097,8 @@ function showDayDetails(dayStr, totalHours) {
 let subjectRenames = {};
 
 // Show color organization modal
-function showColorOrganizationModal() {
-  console.log('showColorOrganizationModal called, colorLegend:', colorLegend);
+async function showColorOrganizationModal() {
+  console.log('showColorOrganizationModal called');
   const modal = document.getElementById('colorModal');
   if (!modal) {
     console.error('Color modal not found');
@@ -1058,10 +1116,17 @@ function showColorOrganizationModal() {
   listEl.innerHTML = '';
   subjectRenames = {};
 
-  const subjects = Object.keys(colorLegend).sort();
-  console.log('Subjects in color legend:', subjects);
-  
-  subjects.forEach(subject => {
+  try {
+    const response = await fetch(`${API_BASE}/api/study/colors`);
+    if (response.ok) {
+      const data = await response.json();
+      const currentMonthColorLegend = data.color_legend || {};
+      const subjects = Object.keys(currentMonthColorLegend).sort();
+      console.log('Subjects in current month color legend:', subjects);
+      
+      const modalColorLegend = currentMonthColorLegend;
+      
+      subjects.forEach(subject => {
     // Track original name
     if (!(subject in subjectRenames)) {
       subjectRenames[subject] = subject;
@@ -1073,10 +1138,11 @@ function showColorOrganizationModal() {
     const colorCircle = document.createElement('button');
     colorCircle.type = 'button';
     colorCircle.className = 'h-8 w-8 rounded-full border-2 border-gray-300 hover:scale-110 transition-transform flex-shrink-0';
-    colorCircle.style.backgroundColor = colorLegend[subject] || '#3b82f6';
+    colorCircle.style.backgroundColor = modalColorLegend[subject] || '#3b82f6';
     colorCircle.dataset.subject = subject;
     colorCircle.title = 'Click to change color';
     colorCircle.addEventListener('click', () => {
+      colorLegend = modalColorLegend;
       showColorPickerForSubject(subject);
     });
     
@@ -1092,7 +1158,20 @@ function showColorOrganizationModal() {
     item.appendChild(colorCircle);
     item.appendChild(subjectName);
     listEl.appendChild(item);
-  });
+      });
+      
+      // Update the global colorLegend for saving
+      colorLegend = modalColorLegend;
+    } else {
+      console.error('Failed to load current month colors');
+      alert('Failed to load color legend. Please try again.');
+      return;
+    }
+  } catch (error) {
+    console.error('Error loading current month colors:', error);
+    alert('Failed to load color legend. Please try again.');
+    return;
+  }
 
   // Add button handler
   const addBtn = document.getElementById('addSubjectBtn');

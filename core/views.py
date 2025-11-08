@@ -6,7 +6,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils import timezone
-from django.db.models import Max, Count, Q
+from django.db.models import Max, Count, Q, Sum
+from django.db.models.functions import TruncDate
 from datetime import datetime, timedelta
 import json
 import random
@@ -20,6 +21,7 @@ from .models import (
     Tag,
     HabitLog,
     TaskLog,
+    LevelLog,
     StatSlot,
     ShopItem,
     UserPurchase,
@@ -113,6 +115,9 @@ def api_habits(request):
 
   habits_data = []
   for habit in habits:
+    # Reset counters if needed based on reset_freq
+    habit.reset_counters()
+    
     habits_data.append({
       'id': habit.id,
       'title': habit.title,
@@ -121,6 +126,7 @@ def api_habits(request):
       'diff': habit.diff,
       'allow_pos': habit.allow_pos,
       'allow_neg': habit.allow_neg,
+      'reset_freq': habit.reset_freq,
       'pos_count': habit.pos_count,
       'neg_count': habit.neg_count,
       'color': habit.get_color(),
@@ -182,7 +188,7 @@ def api_create_habit(request):
     user=request.user,
     title=data.get('title'),
     details=data.get('details', ''),
-    diff=data.get('diff', 'trivial'),
+    diff=data.get('diff', data.get('difficulty', 'trivial')),
     allow_pos=data.get('allow_pos', data.get('allow_positive', True)),
     allow_neg=data.get('allow_neg', data.get('allow_negative', True)),
     reset_freq=data.get('reset_freq', 'never'),
@@ -206,8 +212,11 @@ def api_update_habit(request, habit_id):
 
     habit.title = data.get('title', habit.title)
     habit.details = data.get('details', habit.details)
-    habit.diff = data.get('diff', habit.diff)
     # Support both field name formats for compatibility
+    if 'diff' in data:
+      habit.diff = data.get('diff')
+    elif 'difficulty' in data:
+      habit.diff = data.get('difficulty')
     if 'allow_pos' in data:
       habit.allow_pos = data.get('allow_pos')
     elif 'allow_positive' in data:
@@ -216,7 +225,8 @@ def api_update_habit(request, habit_id):
       habit.allow_neg = data.get('allow_neg')
     elif 'allow_negative' in data:
       habit.allow_neg = data.get('allow_negative')
-    habit.reset_freq = data.get('reset_freq', habit.reset_freq)
+    if 'reset_freq' in data:
+      habit.reset_freq = data.get('reset_freq')
     habit.save()
 
     # Update tags
@@ -345,7 +355,14 @@ def api_start_study_session(request):
   ).exists()
 
   # If first session and user wants to carry over colors, copy last month's colors
-  if first_session_this_month and carry_over_colors:
+  # Check if colors already exist for this month (might have been carried over already)
+  current_month_colors_exist = SubjectColor.objects.filter(
+    user=request.user,
+    year=year,
+    month=month
+  ).exists()
+  
+  if first_session_this_month and carry_over_colors is True and not current_month_colors_exist:
     last_month = month - 1
     last_year = year
     if last_month == 0:
@@ -895,11 +912,15 @@ def api_last_week_recap(request):
   now = timezone.now()
   today = now.date()
   
+  # Calculate last week (Monday to Sunday)
   days_since_monday = today.weekday()
-  most_recent_monday = today - timedelta(days=days_since_monday)
+  if days_since_monday == 0:
+    last_week_end_date = today - timedelta(days=1)
+  else:
+    # Last week ended on the most recent Sunday
+    last_week_end_date = today - timedelta(days=days_since_monday)
   
-  last_week_start_date = most_recent_monday - timedelta(days=7)
-  last_week_end_date = last_week_start_date + timedelta(days=6)
+  last_week_start_date = last_week_end_date - timedelta(days=6)
   
   prev_week_start = timezone.make_aware(datetime.combine(last_week_start_date, datetime.min.time()))
   prev_week_end = timezone.make_aware(datetime.combine(last_week_end_date, datetime.max.time()))
@@ -951,34 +972,68 @@ def api_last_week_recap(request):
       'score': highest_streak_task.streak * 10
     })
 
-  # Most completed habit
-  habit_logs = HabitLog.objects.filter(
-    habit__user=request.user,
-    created_at__gte=prev_week_start,
-    created_at__lte=prev_week_end,
-    positive=True
-  ).values('habit__id', 'habit__title').annotate(count=Count('id')).order_by('-count')
-
-  if habit_logs and habit_logs[0]['count'] >= 5:
-    top_habit = habit_logs[0]
-    standout_items.append({
-      'type': 'habit',
-      'title':f"{top_habit['habit__title']}",
-      'description': f"Completed {top_habit['count']} times",
-      'icon': 'thumbs-up',
-      'score': top_habit['count'] * 5
-    })
-
-  # Longest study session
-  longest_session = study_sessions.order_by('-duration_minutes').first()
-  if longest_session and longest_session.duration_minutes and longest_session.duration_minutes >= 60:
-    hours = longest_session.duration_minutes / 60
+  # Study session highlights
+  # Check for subject with >10 hours total in the week
+  subject_hours = study_sessions.values('subject').annotate(
+    total_minutes=Sum('duration_minutes')
+  ).filter(total_minutes__gte=600)  # 10 hours = 600 minutes
+  
+  if subject_hours.exists():
+    top_subject = subject_hours.order_by('-total_minutes').first()
+    total_hours = top_subject['total_minutes'] / 60
     standout_items.append({
       'type': 'study',
-      'title': longest_session.subject,
-      'description': f"{hours:.1f} hour session",
+      'title': top_subject['subject'],
+      'description': f"{total_hours:.1f} hours total",
       'icon': 'clock',
-      'score': longest_session.duration_minutes
+      'score': int(top_subject['total_minutes'])
+    })
+  else:
+    # Check for single day study session >2.5 hours
+    # Group by subject and date, then sum duration for each day
+    daily_study = study_sessions.annotate(
+      study_date=TruncDate('start_time')
+    ).values('subject', 'study_date').annotate(
+      daily_minutes=Sum('duration_minutes')
+    ).filter(daily_minutes__gte=150)  # 2.5 hours = 150 minutes
+    
+    if daily_study.exists():
+      # Get the day with the most minutes for a single subject
+      best_day = daily_study.order_by('-daily_minutes').first()
+      daily_minutes_value = best_day['daily_minutes']
+      hours = daily_minutes_value / 60
+      standout_items.append({
+        'type': 'study',
+        'title': best_day['subject'],
+        'description': f"{hours:.1f} hours in one day",
+        'icon': 'clock',
+        'score': int(daily_minutes_value)
+      })
+
+  # No missed dailies highlight
+  if missed_dailies == 0 and dailies_during_week.exists():
+    standout_items.append({
+      'type': 'perfect_week',
+      'title': 'Perfect Week',
+      'description': 'No missed dailies!',
+      'icon': 'star',
+      'score': 100
+    })
+
+  # Level up highlight (>5 level ups in the week)
+  level_ups_count = LevelLog.objects.filter(
+    user=request.user,
+    created_at__gte=prev_week_start,
+    created_at__lte=prev_week_end
+  ).count()
+  
+  if level_ups_count > 5:
+    standout_items.append({
+      'type': 'level_up',
+      'title': 'Level Master',
+      'description': f'Leveled up {level_ups_count} times!',
+      'icon': 'star',
+      'score': level_ups_count * 15
     })
 
   # Best habit (highest positive to negative ratio)
@@ -997,18 +1052,8 @@ def api_last_week_recap(request):
         })
         break
 
-  # In testing mode, show placeholder boxes for all highlight types
-  if TESTING_MODE:
-    # Add placeholders for all possible highlight types
-    if not any(item['type'] == 'streak' for item in standout_items):
-      standout_items.append({'type': 'streak', 'title': 'Example Daily Task', 'description': '7 day streak!', 'icon': 'flame', 'score': 70})
-    if not any(item['type'] == 'habit' for item in standout_items):
-      standout_items.append({'type': 'habit', 'title': 'Example Habit', 'description': 'Completed 10 times', 'icon': 'thumbs-up', 'score': 50})
-    if not any(item['type'] == 'study' for item in standout_items):
-      standout_items.append({'type': 'study', 'title': 'Mathematics', 'description': '2.5 hour session', 'icon': 'clock', 'score': 150})
-    if not any(item['type'] == 'habit_ratio' for item in standout_items):  
-      # Sort score - show all items (no limit)
-      standout_items.sort(key=lambda x: x['score'], reverse=True)
+  # Sort by score
+  standout_items.sort(key=lambda x: x['score'], reverse=True)
 
   # Find best habit for "Stopped Procrastination" card
   best_habit_title = "Stopped Procrastination"
@@ -1184,11 +1229,24 @@ def api_study_stats(request):
   now = timezone.now()
 
   if view_type == 'monthly':
-    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if now.month == 12:
-      end_of_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_offset = int(request.GET.get('month_offset', 0))
+    target_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if month_offset != 0:
+      month = target_date.month + month_offset
+      year = target_date.year
+      while month > 12:
+        month -= 12
+        year += 1
+      while month < 1:
+        month += 12
+        year -= 1
+      target_date = target_date.replace(year=year, month=month)
+    
+    start_of_month = target_date
+    if target_date.month == 12:
+      end_of_month = target_date.replace(year=target_date.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     else:
-      end_of_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+      end_of_month = target_date.replace(month=target_date.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
     sessions = StudySession.objects.filter(
       user=request.user,
@@ -1197,8 +1255,8 @@ def api_study_stats(request):
       active=False
     )
 
-    year = now.year
-    month = now.month
+    year = target_date.year
+    month = target_date.month
     color_legend = {}
     subject_colors = SubjectColor.objects.filter(
       user=request.user,
@@ -1245,6 +1303,8 @@ def api_study_stats(request):
   
   else:
     week_offset = int(request.GET.get('week_offset', 0))
+    
+    # Calculate current week (Monday to Sunday)
     days_since_monday = now.weekday()
     start_of_current_week = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_week = start_of_current_week + timedelta(days=week_offset * 7)
@@ -1257,40 +1317,45 @@ def api_study_stats(request):
       active=False
     )
 
-    if not sessions.exists() and week_offset == 0:
-      most_recent_session = StudySession.objects.filter(
-        user=request.user,
-        active=False
-      ).order_by('-start_time').first()
-      
-      if most_recent_session:
-        session_date = most_recent_session.start_time
-        days_since_monday = session_date.weekday()
-        start_of_week = (session_date - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_week = start_of_week + timedelta(days=7)
-        
-        sessions = StudySession.objects.filter(
-          user=request.user,
-          start_time__gte=start_of_week,
-          start_time__lt=end_of_week,
-          active=False
-        )
-
-    # Get color legend for current month (use the week's month)
-    week_year = start_of_week.year
-    week_month = start_of_week.month
-    color_legend = {}
-    subject_colors = SubjectColor.objects.filter(
-      user=request.user,
-      year=week_year,
-      month=week_month
-    )
-    for sc in subject_colors:
-      color_legend[sc.subject] = sc.color
-
     stats_by_day = {}
     stats_by_subject = {}
     total_hours = 0
+    subjects_in_week = set()
+
+    # First pass: collect all subjects that appear in this week's sessions
+    for session in sessions:
+      subjects_in_week.add(session.subject)
+
+    # Get color legend only for subjects that appear in this week
+    # Use the month that contains the start of the week
+    week_year = start_of_week.year
+    week_month = start_of_week.month
+    color_legend = {}
+    
+    # Get colors for subjects that appear in this week
+    subject_colors = SubjectColor.objects.filter(
+      user=request.user,
+      year=week_year,
+      month=week_month,
+      subject__in=subjects_in_week
+    )
+    for sc in subject_colors:
+      color_legend[sc.subject] = sc.color
+    
+    # Also check if week spans into next month and get colors from there too
+    if end_of_week.month != week_month or end_of_week.year != week_year:
+      next_month_year = end_of_week.year
+      next_month_month = end_of_week.month
+      next_month_colors = SubjectColor.objects.filter(
+        user=request.user,
+        year=next_month_year,
+        month=next_month_month,
+        subject__in=subjects_in_week
+      )
+      for sc in next_month_colors:
+        # Only add if not already in color_legend (prioritize start of week month)
+        if sc.subject not in color_legend:
+          color_legend[sc.subject] = sc.color
 
     # Initialize all subjects with 0 hours
     for subject in color_legend.keys():
@@ -1336,6 +1401,71 @@ def api_study_stats(request):
   
 @login_required
 @csrf_exempt
+@require_http_methods(['POST'])
+def api_carry_over_colors(request):
+  """Carry over colors from last month to current month"""
+  try:
+    now = timezone.now()
+    year = now.year
+    month = now.month
+    
+    # Check if this is the first session of the month
+    first_session_this_month = not StudySession.objects.filter(
+      user=request.user,
+      start_time__year=year,
+      start_time__month=month,
+      active=False
+    ).exists()
+    
+    if not first_session_this_month:
+      return JsonResponse({'error': 'Not the first session of the month'}, status=400)
+    
+    # Calculate last month
+    last_month = month - 1
+    last_year = year
+    if last_month == 0:
+      last_month = 12
+      last_year = year - 1
+    
+    # Get last month's colors
+    last_month_colors = SubjectColor.objects.filter(
+      user=request.user,
+      year=last_year,
+      month=last_month
+    )
+    
+    if not last_month_colors.exists():
+      return JsonResponse({'error': 'No colors to carry over from last month'}, status=400)
+    
+    # Copy colors to current month
+    carried_over_count = 0
+    for old_color in last_month_colors:
+      obj, created = SubjectColor.objects.get_or_create(
+        user=request.user,
+        subject=old_color.subject,
+        year=year,
+        month=month,
+        defaults={'color': old_color.color}
+      )
+      if created:
+        carried_over_count += 1
+    
+    return JsonResponse({
+      'success': True,
+      'carried_over_count': carried_over_count,
+      'color_legend': {sc.subject: sc.color for sc in SubjectColor.objects.filter(
+        user=request.user,
+        year=year,
+        month=month
+      )}
+    })
+  except Exception as e:
+    import traceback
+    traceback.print_exc()
+    return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
 @require_http_methods(['GET', 'POST'])
 def api_subject_colors(request):
   """Get or update subject color legend for current month"""
@@ -1345,11 +1475,28 @@ def api_subject_colors(request):
     month = now.month
 
     if request.method == 'GET':
-      subject_colors = SubjectColor.objects.filter(
-        user=request.user,
-        year=year,
-        month=month
-      )
+      # Check if requesting last month's colors
+      get_last_month = request.GET.get('last_month', 'false').lower() == 'true'
+      
+      if get_last_month:
+        last_month = month - 1
+        last_year = year
+        if last_month == 0:
+          last_month = 12
+          last_year = year - 1
+        
+        subject_colors = SubjectColor.objects.filter(
+          user=request.user,
+          year=last_year,
+          month=last_month
+        )
+      else:
+        subject_colors = SubjectColor.objects.filter(
+          user=request.user,
+          year=year,
+          month=month
+        )
+      
       color_legend = {}
       used_colors = set()
       for sc in subject_colors:

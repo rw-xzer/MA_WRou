@@ -197,7 +197,7 @@ function updateUserProfile() {
   }
 
   if (healthText) healthText.textContent = `${userProfile.hp}/${userProfile.max_hp}`;
-  if (xpText) xpText.textContent = `${userProfile.xp}/${userProfile.max_xp}`;
+  if (xpText) xpText.textContent = `Lv.${userProfile.level} ${userProfile.xp}/${userProfile.max_xp}`;
   
   // Ensure coins text is always set and visible
   if (coinsText) {
@@ -820,6 +820,11 @@ function updateRecap(data) {
     }
     
     data.items.forEach(item => {
+      // Filter out habit completion highlights
+      if (item.type === 'habit') {
+        return;
+      }
+      
       const card = document.createElement('div');
       card.className = 'flex-shrink-0 flex items-center gap-2 rounded-lg border border-black bg-white px-4 py-2';
       
@@ -858,15 +863,6 @@ function updateRecap(data) {
 // check dailies
 async function checkDailies() {
   try {
-    // Check if modal has already been shown today
-    const today = new Date().toDateString();
-    const lastShownDate = localStorage.getItem('pendingItemsModalShown');
-    
-    if (lastShownDate === today) {
-      // Modal already shown today, skip
-      return;
-    }
-
     const response = await fetch(`${API_BASE}/api/dailies/check`, {
       method: 'GET',
     });
@@ -878,6 +874,8 @@ async function checkDailies() {
       const uncheckedTasks = data.pending_tasks.filter(item => !item.completed);
       
       if (uncheckedDailies.length > 0 || uncheckedTasks.length > 0) {
+        // Always show the modal if there are pending items
+        const today = new Date().toDateString();
         showPendingItemsModal(uncheckedDailies, uncheckedTasks);
         // Mark as shown today
         localStorage.setItem('pendingItemsModalShown', today);
@@ -1238,7 +1236,7 @@ async function deleteTask() {
 }
 
 // study session modal
-function showStudyModal() {
+async function showStudyModal() {
   const modal = document.getElementById('studyModal');
   if (modal) {
     modal.classList.remove('hidden');
@@ -1258,8 +1256,55 @@ function showStudyModal() {
       btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
     });
 
-    // reload current month colors when opening modal
-    loadCurrentMonthColors().then(() => {
+    // Check if first session of month and show carry-over prompt
+    // Explicitly set to false first to ensure no accidental carry-over
+    modal.dataset.colorsCarriedOver = 'false';
+    
+    try {
+      const firstSessionThisMonth = await checkFirstSessionOfMonth();
+      if (firstSessionThisMonth) {
+        const lastMonthColors = await getLastMonthColors();
+        if (lastMonthColors && Object.keys(lastMonthColors).length > 0) {
+          const shouldCarryOver = confirm(
+            'Would you like to carry over the color legend from last month?'
+          );
+          if (shouldCarryOver) {
+            // Carry over colors immediately so auto-color selection works
+            try {
+              const response = await fetch(`${API_BASE}/api/study/colors/carry-over`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': getCsrfToken(),
+                },
+              });
+              if (response.ok) {
+                const data = await response.json();
+                console.log(`Carried over ${data.carried_over_count} colors from last month`);
+                // Store that we carried over colors so startStudySession knows
+                modal.dataset.colorsCarriedOver = 'true';
+              } else {
+                const errorData = await response.json().catch(() => ({}));
+                console.warn('Failed to carry over colors:', response.status, errorData);
+                modal.dataset.colorsCarriedOver = 'false';
+              }
+            } catch (error) {
+              console.error('Error carrying over colors:', error);
+              modal.dataset.colorsCarriedOver = 'false';
+            }
+          }
+          // If user clicked "No" or closed the dialog, colorsCarriedOver stays 'false'
+        }
+      }
+    } catch (error) {
+      console.warn('Could not check first session of month:', error);
+      // Ensure it's false on error
+      modal.dataset.colorsCarriedOver = 'false';
+    }
+
+    // reload current month colors when opening modal (after potential carry-over)
+    await loadCurrentMonthColors();
+    
       // Select first base color by default
       const firstBaseBtn = document.querySelector('.base-color-btn');
       if (firstBaseBtn) {
@@ -1272,7 +1317,6 @@ function showStudyModal() {
           }
         }, 100);
       }
-    });
   }
 }
 
@@ -1635,25 +1679,16 @@ async function startStudySession(params) {
   console.log('Starting study session:', { subject, mode, duration, color });
 
   try {
-    // Check if this is the first session of the month (non-blocking)
+    // Check if colors were already carried over in the modal
     let carryOverColors = false;
-    try {
-      const firstSessionThisMonth = await checkFirstSessionOfMonth();
-      if (firstSessionThisMonth){
-        // Check if user wants to carry over colors
-        const lastMonthColors = await getLastMonthColors();
-        if (lastMonthColors && Object.keys(lastMonthColors).length > 0) {
-          const shouldCarryOver = confirm(
-            'Would you like to carry over the color legend from last month?'
-          );
-          if (shouldCarryOver) {
-            carryOverColors = true;
-          }
-        }
+    const studyModal = document.getElementById('studyModal');
+    if (studyModal) {
+      const colorsCarriedOver = studyModal.dataset.colorsCarriedOver;
+      if (colorsCarriedOver === 'true') {
+        carryOverColors = true;
       }
-    } catch (error) {
-      // If checking first session fails, just continue without carry-over
-      console.warn('Could not check first session of month:', error);
+      // Clear the flag after checking
+      delete studyModal.dataset.colorsCarriedOver;
     }
 
     console.log('Sending study session request...');
@@ -1693,6 +1728,9 @@ async function startStudySession(params) {
       //save subject color
       subjectColors[subject] = data.color || color;
       saveSubjectColors();
+      
+      // Reload current month colors after session starts (in case colors were carried over)
+      await loadCurrentMonthColors();
 
       // Save session state to localStorage for restoration after refresh
       localStorage.setItem('activeStudySessionState', JSON.stringify({
@@ -2222,13 +2260,9 @@ async function checkFirstSessionOfMonth() {
 // Get last month's color legend
 async function getLastMonthColors() {
   try {
-    const now = new Date();
-    const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-    const lastYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-
-    const response = await fetch(`${API_BASE}/api/study/colors`);
+    const response = await fetch(`${API_BASE}/api/study/colors?last_month=true`);
     if (!response.ok) {
-      console.warn('Failed to fetch colors:', response.status);
+      console.warn('Failed to fetch last month colors:', response.status);
       return null;
     }
     const data = await response.json();

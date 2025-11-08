@@ -33,4 +33,5 @@ urlpatterns = [
   path("api/shop/items/", views.api_shop_items, name="api_shop_items"),
   path("api/study/stats/", views.api_study_stats, name="api_study_stats"),
   path("api/study/colors", views.api_subject_colors, name="api_subject_colors"),
+  path("api/study/colors/carry-over", views.api_carry_over_colors, name="api_carry_over_colors"),
 ]

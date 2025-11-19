@@ -5,7 +5,7 @@
   --bg-card: #ffffff;
   --bg-accent: #fef3c7;
   --bg-accent-hover: #fde68a;
-  
+
   --text-primary: #1f2937;
   --text-secondary: #4b5563;
   --text-muted: #6b7280;
@@ -22,71 +22,154 @@
   --border-dark: #9ca3af;
 }
 
-
 /* Avatar animations */
 .avatar {
   transition: all 0.3s ease;
 }
 
 .avatar-idle {
-  animation: idle 2s ease-in-out infinite;
+  animation: idle 6s ease-in-out infinite;
 }
 
 .avatar-studying {
-  animation: studying 1.5s ease-in-out infinite;
+  animation: studying 6s ease-in-out infinite;
 }
 
 .avatar-hurt {
-  animation: hurt 0.5s ease-in-out;
-  filter: hue-rotate(0deg) saturate(1.5);
+  animation: hurt 0.1s linear infinite;
 }
 
-.avatar-celebrate {
+.avatar-celebrate,
+.avatar-celebrating {
   animation: celebrate 1s ease-in-out;
 }
 
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: #ff6b9d;
+  animation: confetti-fall linear forwards;
+  top: -10px;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(600px) rotate(720deg);
+    opacity: 0;
+  }
+}
+
 @keyframes idle {
-  0%, 100% {
+  0% {
     transform: translateY(0);
   }
+  12.5% {
+    transform: translateY(-0.5px);
+  }
+  25% {
+    transform: translateY(-1px);
+  }
+  37.5% {
+    transform: translateY(-0.5px);
+  }
   50% {
-    transform: translateY(-5px);
+    transform: translateY(0);
+  }
+  62.5% {
+    transform: translateY(-0.5px);
+  }
+  75% {
+    transform: translateY(-1px);
+  }
+  87.5% {
+    transform: translateY(-0.5px);
+  }
+  100% {
+    transform: translateY(0);
   }
 }
 
 @keyframes studying {
-  0%, 100% {
-    transform: translateY(0) rotate(-2deg);
+  0% {
+    transform: rotate(-3deg);
+  }
+  20% {
+    transform: rotate(-3deg);
+  }
+  30% {
+    transform: rotate(0deg);
   }
   50% {
-    transform: translateY(-3px) rotate(2deg);
+    transform: rotate(0deg);
+  }
+  60% {
+    transform: rotate(3deg);
+  }
+  80% {
+    transform: rotate(3deg);
+  }
+  90% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(0deg);
   }
 }
 
 @keyframes hurt {
-  0%, 100% {
-    transform: translateX(0);
+  0% {
+    transform: translate(-2px, -1px);
   }
-  25% {
-    transform: translateX(-10px);
+  10% {
+    transform: translate(2px, 1px);
   }
-  75% {
-    transform: translateX(10px);
+  20% {
+    transform: translate(-1px, 2px);
+  }
+  30% {
+    transform: translate(1px, -2px);
+  }
+  40% {
+    transform: translate(-2px, 1px);
+  }
+  50% {
+    transform: translate(2px, -1px);
+  }
+  60% {
+    transform: translate(-1px, -2px);
+  }
+  70% {
+    transform: translate(1px, 2px);
+  }
+  80% {
+    transform: translate(-2px, -1px);
+  }
+  90% {
+    transform: translate(2px, 1px);
+  }
+  100% {
+    transform: translate(-2px, -1px);
   }
 }
 
 @keyframes celebrate {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1) translateY(0);
   }
   25% {
-    transform: scale(1.1) translateY(-10px);
+    transform: scale(1.03) translateY(-5px);
   }
   50% {
-    transform: scale(1.15) translateY(-15px);
+    transform: scale(1.05) translateY(-8px);
   }
   75% {
-    transform: scale(1.1) translateY(-10px);
+    transform: scale(1.03) translateY(-5px);
   }
 }
 

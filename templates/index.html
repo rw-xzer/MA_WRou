@@ -252,24 +252,27 @@
     <!--Study Session Modal (shown when active)-->
     <div
       id="activeStudySessionModal"
-      class="hidden border-b border-gray-200 bg-white px-4 py-4"
+      class="hidden border-b border-gray-200 bg-white px-4 py-2"
     >
-      <div class="flex flex-col items-center gap-3">
-        <!--Subject and Color Display-->
-        <div class="flex items-center gap-2">
-          <div
-            id="studySessionColorIndicator"
-            class="h-6 w-6 rounded-full border-2 border-black"
-          ></div>
-          <span id="studySessionSubject" class="text-lg font-bold"></span>
+      <div class="flex items-center justify-between gap-4">
+        <!--Left side: Subject and Timer-->
+        <div class="ml-10 flex flex-col items-center gap-1">
+          <!--Subject and Color Display-->
+          <div class="flex items-center gap-2">
+            <div
+              id="studySessionColorIndicator"
+              class="h-5 w-5 rounded-full border-2 border-black"
+            ></div>
+            <span id="studySessionSubject" class="text-base font-bold"></span>
+          </div>
+
+          <!--Timer/Stopwatch Display-->
+          <div class="font-mono text-2xl font-bold" id="studySessionTimer">
+            00:00:00
+          </div>
         </div>
 
-        <!--Timer/Stopwatch Display-->
-        <div class="font-mono text-4xl font-bold" id="studySessionTimer">
-          00:00:00
-        </div>
-
-        <!--Control Buttons-->
+        <!--Right side: Control Buttons-->
         <div class="flex gap-2">
           <button
             id="studySessionPauseBtn"
@@ -291,27 +294,72 @@
 
     <!-- Avatar Section -->
     <section
-      class="flex h-[56.6dvh] flex-col items-center justify-center border-b border-gray-200 bg-inherit px-4 py-8"
+      class="relative flex h-[56.6dvh] flex-col items-center justify-center border-b border-gray-200 px-4 py-8"
+      style="background-color: #d8b9b9"
     >
       <div
+        id="avatar-floor"
+        class="absolute right-0 bottom-0 left-0 h-[32%]"
+        style="background-color: #d8aeae; border-top: 2px solid #d8a1a1"
+      ></div>
+      <div
         id="avatar"
-        class="avatar avatar-idle mb-6 flex h-32 w-32 items-center justify-center rounded-full bg-gray-300"
+        class="avatar avatar-idle relative mb-6 flex items-end justify-center"
+        style="
+          height: calc(56.6dvh * 2 / 3);
+          width: calc(56.6dvh * 2 / 3);
+          z-index: 1;
+        "
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1"
-          stroke="currentColor"
-          class="h-20 w-20 text-gray-600"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-          />
-        </svg>
+        <img
+          id="avatar-body"
+          class="absolute inset-0 h-full w-full object-contain"
+          style="z-index: 1"
+          alt="avatar body"
+        />
+        <img
+          id="avatar-socks"
+          class="absolute inset-0 h-full w-full object-contain"
+          style="z-index: 2"
+          alt="avatar socks"
+        />
+        <img
+          id="avatar-pants"
+          class="absolute inset-0 h-full w-full object-contain"
+          style="z-index: 3"
+          alt="avatar pants"
+        />
+        <img
+          id="avatar-shoes"
+          class="absolute inset-0 h-full w-full object-contain"
+          style="z-index: 4"
+          alt="avatar shoes"
+        />
+        <img
+          id="avatar-shirt"
+          class="absolute inset-0 h-full w-full object-contain"
+          style="z-index: 5"
+          alt="avatar shirt"
+        />
+        <img
+          id="avatar-hair"
+          class="absolute inset-0 h-full w-full object-contain"
+          style="z-index: 6"
+          alt="avatar hair"
+        />
       </div>
+      <div
+        id="confetti-container"
+        style="
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          pointer-events: none;
+          overflow: hidden;
+        "
+      ></div>
     </section>
 
     <!-- Health/XP Bars -->
@@ -879,13 +927,20 @@
     <div id="pendingItemsList" class="mb-4 max-h-[400px] overflow-y-auto">
       <!--Pending items will be inserted here-->
     </div>
-    <div class="flex items-center">
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        onclick="dismissPendingItemsModal()"
+        class="flex-1 rounded-lg border border-black bg-gray-200 px-4 py-2"
+      >
+        Dismiss
+      </button>
       <button
         type="button"
         onclick="confirmPendingItems()"
         class="flex-1 rounded-lg border border-black bg-blue-500 px-4 py-2 text-white"
       >
-        Confirm
+        Submit
       </button>
     </div>
   </div>
@@ -991,6 +1046,8 @@
   window.editHabit = editHabit;
   window.editTask = editTask;
   window.deleteHabit = deleteHabit;
+  window.dismissPendingItemsModal = dismissPendingItemsModal;
+  window.confirmPendingItems = confirmPendingItems;
   window.deleteTask = deleteTask;
   window.pauseStudySession = pauseStudySession;
   window.stopActiveStudySession = stopActiveStudySession;

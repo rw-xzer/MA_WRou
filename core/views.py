@@ -69,15 +69,27 @@ def stats_page(request):
 
 @login_required
 def shop_page(request):
-  """Shop page"""
+  """Shop page - inaccessible during active study session"""
+  # Check if user has an active study session
+  active_session = StudySession.objects.filter(user=request.user, active=True).first()
+  if active_session:
+    return redirect('index')
+  
   return render(request, 'shop.html')
 
 # API Endpoints
 @login_required
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def api_user_profile(request):
   """Get user profile data"""
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  
+  if request.method == 'POST':
+    data = json.loads(request.body) if request.body else {}
+    if 'avatar_state' in data:
+      profile.avatar_state = data['avatar_state']
+      profile.save()
+  
   return JsonResponse({
     'level': profile.level,
     'xp': profile.xp,
@@ -494,6 +506,8 @@ def api_stop_study_session(request):
         level_up = profile.add_xp(xp_earned)
         if level_up:
           profile.avatar_state = 'celebrating'
+        elif profile.avatar_state == 'hurt':
+          profile.avatar_state = 'idle'
 
       hour_blocks = int(total_hours_today)
       previous_total_hours = total_hours_today - hours
@@ -504,6 +518,12 @@ def api_stop_study_session(request):
 
       if coins_earned > 0:
         profile.add_coins(coins_earned)
+        if profile.avatar_state != 'celebrating':
+          profile.avatar_state = 'celebrating'
+      
+      if xp_earned > 0 and not level_up:
+        if profile.avatar_state != 'celebrating':
+          profile.avatar_state = 'celebrating'
 
     profile.save()
 
@@ -543,7 +563,11 @@ def api_complete_habit(request, habit_id):
       diff_bonus = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[habit.diff]
       xp = random.randint(base_min + diff_bonus, base_max + diff_bonus)
 
-      profile.add_xp(xp)
+      level_up = profile.add_xp(xp)
+      if level_up:
+        profile.avatar_state = 'celebrating'
+      elif profile.avatar_state == 'hurt':
+        profile.avatar_state = 'idle'
       
       # Coins : easy = 1-2, medium = 2-4, hard = 4-6
       coins = 0
@@ -556,6 +580,12 @@ def api_complete_habit(request, habit_id):
       
       if coins > 0:
         profile.add_coins(coins)
+        if profile.avatar_state != 'celebrating':
+          profile.avatar_state = 'celebrating'
+      
+      if xp > 0 and not level_up:
+        if profile.avatar_state != 'celebrating':
+          profile.avatar_state = 'celebrating'
       profile.all_time_habits_completed += 1
       profile.save()
 
@@ -571,6 +601,7 @@ def api_complete_habit(request, habit_id):
       diff_penalty = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[habit.diff]
       hp_loss = random.randint(base_min + diff_penalty, base_max + diff_penalty)
       profile.lose_health(hp_loss)
+      profile.avatar_state = 'hurt'
 
       profile.save()
 
@@ -650,6 +681,9 @@ def api_complete_task(request, task_id):
             max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(Max('streak'))['streak__max'] or 0
             profile.longest_daily_streak = max_streak
 
+          if profile.avatar_state == 'celebrating':
+            profile.avatar_state = 'idle'
+
           profile.save()
 
           #Delete task log entry
@@ -672,6 +706,7 @@ def api_complete_task(request, task_id):
           hp_loss = hp_loss * (2 * weeks_overdue)
 
         profile.lose_health(hp_loss)
+        profile.avatar_state = 'hurt'
         profile.save()
 
       task.save()
@@ -687,39 +722,69 @@ def api_complete_task(request, task_id):
 
       profile, _ = UserProfile.objects.get_or_create(user=request.user)
       
-      # Base XP : 5-10
-      base_min = 5
-      base_max = 10
-
-      # Add diff bonus : +2xp per diff
-      diff_bonus = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[task.diff]
-      xp = random.randint(base_min + diff_bonus, base_max + diff_bonus)
-      profile.add_xp(xp)
-      
-      # Coins : medium = 1-3, hard = 3-5
+      xp = 0
       coins = 0
-      if task.diff == 'medium':
-        coins = random.randint(1,3)
-      elif task.diff == 'hard':
-        coins = random.randint(3,5)
+      
+      if task.task_type == 'daily':
+        # Daily rewards scale with streak
+        base_min = 5
+        base_max = 7
+        
+        # Add diff bonus : +2xp per diff
+        diff_bonus = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[task.diff]
+        
+        # Weekly streak bonus: +5xp per week
+        weeks_streak = task.streak // 7
+        weekly_bonus = weeks_streak * 5
+        
+        xp = random.randint(base_min + diff_bonus, base_max + diff_bonus) + weekly_bonus
+        level_up = profile.add_xp(xp)
+        
+        # Daily coins: easy = 1-3, medium = 3-5, hard = 5-7
+        if task.diff == 'easy':
+          coins = random.randint(1, 3)
+        elif task.diff == 'medium':
+          coins = random.randint(3, 5)
+        elif task.diff == 'hard':
+          coins = random.randint(5, 7)
+        
+        # Weekly streak bonus: +5 coins per week
+        coins += weeks_streak * 5
+        
+        if coins > 0:
+          profile.add_coins(coins)
+      else:
+        # Regular task rewards
+        base_min = 5
+        base_max = 10
 
-      if coins > 0:
-        profile.add_coins(coins)
+        diff_bonus = {'trivial': 0, 'easy': 2, 'medium': 4, 'hard': 6}[task.diff]
+        xp = random.randint(base_min + diff_bonus, base_max + diff_bonus)
+        level_up = profile.add_xp(xp)
+        
+        if task.diff == 'medium':
+          coins = random.randint(1,3)
+        elif task.diff == 'hard':
+          coins = random.randint(3,5)
+        
+        if coins > 0:
+          profile.add_coins(coins)
+
+      if level_up:
+        profile.avatar_state = 'celebrating'
+      elif xp > 0 and not level_up:
+        if profile.avatar_state != 'celebrating':
+          profile.avatar_state = 'celebrating'
+      elif profile.avatar_state == 'hurt':
+        profile.avatar_state = 'idle'
+      
       profile.all_time_tasks_completed += 1
 
-      # Update longest daily streak
-      old_longest_streak = profile.longest_daily_streak
       if task.task_type == 'daily' and task.streak > profile.longest_daily_streak:
         profile.longest_daily_streak = task.streak
       profile.save()
 
-      # Store earned amount in TaskLog
       TaskLog.objects.create(task=task, xp_earned=xp, coins_earned=coins)
-
-      level_up = profile.xp >= profile.max_xp
-      if level_up:
-        profile.avatar_state = 'celebrating'
-        profile.save()
       
       return JsonResponse({
         'success': True,
@@ -841,9 +906,18 @@ def api_reset_dailies(request):
 
     was_completed_yesterday = False
 
+    # Check if daily was completed yesterday or today
     if daily.last_completed:
       last_completed_date = daily.last_completed.date() if hasattr(daily.last_completed, 'date') else daily.last_completed
       if last_completed_date == yesterday or last_completed_date == today:
+        was_completed_yesterday = True
+    elif daily.completed:
+      # If daily is marked as completed
+      if daily.completed_at:
+        completed_at_date = daily.completed_at.date() if hasattr(daily.completed_at, 'date') else daily.completed_at
+        if completed_at_date == yesterday or completed_at_date == today:
+          was_completed_yesterday = True
+      else:
         was_completed_yesterday = True
 
     if not was_completed_yesterday:
@@ -851,6 +925,8 @@ def api_reset_dailies(request):
       diff_penalty = {'trivial': 0, 'easy': 1, 'medium': 2, 'hard': 3}[daily.diff]
       hp_loss += diff_penalty
       profile.lose_health(hp_loss)
+      if profile.avatar_state != 'celebrating':
+        profile.avatar_state = 'hurt'
 
       if daily.streak > 0:
         daily.streak = 0
@@ -877,6 +953,8 @@ def api_reset_dailies(request):
       hp_loss = hp_loss * (2 * weeks_overdue)
 
     profile.lose_health(hp_loss)
+    if profile.avatar_state not in ['celebrating', 'celebrate']:
+      profile.avatar_state = 'hurt'
 
   for daily in dailies:
     daily.completed = False

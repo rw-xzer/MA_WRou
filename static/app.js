@@ -163,19 +163,22 @@ function setupEventListeners() {
   }
 }
 
+let isInitialPageLoad = true;
+
 // Load user profile
 async function loadUserProfile() {
   try {
     const response = await fetch(`${API_BASE}/api/profile/`);
     userProfile = await response.json();
-    updateUserProfile();
+    updateUserProfile(isInitialPageLoad);
+    isInitialPageLoad = false;
   } catch (error) {
     console.error('Error loading user profile:', error);
   }
 }
 
 // Update user profile UI
-function updateUserProfile() {
+function updateUserProfile(isInitialLoad = false) {
   if (!userProfile) return;
 
   // Update health/xp bars
@@ -216,16 +219,224 @@ function updateUserProfile() {
   }
 
   // Update avatar state
-  updateAvatar(userProfile.avatar_state);
+  let currentState = userProfile.avatar_state || 'idle';
+  
+  if (isInitialLoad && currentState === 'celebrating') {
+    currentState = 'idle';
+    userProfile.avatar_state = 'idle';
+    fetch(`${API_BASE}/api/profile/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ avatar_state: 'idle' }),
+    }).catch(() => {});
+  }
+  
+  updateAvatar(currentState);
+  
+  if (currentState === 'hurt') {
+    setTimeout(() => {
+      if (userProfile && userProfile.avatar_state === 'hurt') {
+        userProfile.avatar_state = 'idle';
+        updateAvatar('idle');
+        fetch(`${API_BASE}/api/profile/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: JSON.stringify({ avatar_state: 'idle' }),
+        }).catch(() => {});
+      }
+    }, 500);
+  }
 
 }
 
 // Update avatar animation
+let avatarAnimationInterval = null;
+let currentAvatarFrame = 0;
+let previousAvatarState = 'idle';
+const avatarFrameSequence = [1, 2, 3, 2, 1, 2, 3, 2];
+
 function updateAvatar(state) {
   const avatar = document.getElementById('avatar');
   if (!avatar) return;
 
-  avatar.className = `avatar avatar-${state}`;
+  const avatarState = state || 'idle';
+  
+  if (avatarState === 'hurt' && previousAvatarState !== 'hurt') {
+    previousAvatarState = avatarState;
+  } else if (avatarState !== 'hurt' && previousAvatarState === 'hurt') {
+    currentAvatarFrame = 0;
+    previousAvatarState = avatarState;
+  } else if ((avatarState === 'idle' && previousAvatarState === 'studying') || 
+             (avatarState === 'studying' && previousAvatarState === 'idle')) {
+    currentAvatarFrame = 0;
+    previousAvatarState = avatarState;
+  } else if (avatarState !== 'hurt') {
+    previousAvatarState = avatarState;
+  }
+  
+  avatar.className = `avatar avatar-${avatarState}`;
+  
+  if (avatarAnimationInterval) {
+    if (typeof avatarAnimationInterval === 'number') {
+      clearTimeout(avatarAnimationInterval);
+    } else {
+      clearInterval(avatarAnimationInterval);
+    }
+    avatarAnimationInterval = null;
+  }
+
+  if (avatarState === 'idle' || avatarState === 'studying') {
+    startIdleAnimation();
+  } else if (avatarState === 'hurt') {
+    startHurtAnimation();
+  } else if (avatarState === 'celebrating') {
+    startCelebrateAnimation();
+  }
+}
+
+function startIdleAnimation() {
+  const avatar = document.getElementById('avatar');
+  if (!avatar) return;
+  
+  const character = 'default_girl';
+  const clothesType = 'default';
+  
+  avatar.style.animation = 'none';
+  void avatar.offsetWidth;
+  avatar.style.animation = null;
+  
+  currentAvatarFrame = 0;
+  
+  const updateFrame = () => {
+    const frameNum = avatarFrameSequence[currentAvatarFrame];
+    const basePath = `/static/avatars`;
+    
+    document.getElementById('avatar-body').src = `${basePath}/${character}/idle/idle${frameNum}_body.svg`;
+    document.getElementById('avatar-hair').src = `${basePath}/${character}/idle/idle${frameNum}_hair.svg`;
+    document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/socks.svg`;
+    document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/pants.svg`;
+    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/shoes.svg`;
+    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/shirt.svg`;
+    
+    const baseDelay = 750;
+    const delay = frameNum === 1 ? baseDelay * 2 : baseDelay;
+    
+    currentAvatarFrame = (currentAvatarFrame + 1) % avatarFrameSequence.length;
+    
+    if (avatarAnimationInterval) {
+      if (typeof avatarAnimationInterval === 'number') {
+        clearTimeout(avatarAnimationInterval);
+      } else {
+        clearInterval(avatarAnimationInterval);
+      }
+    }
+    
+    avatarAnimationInterval = setTimeout(updateFrame, delay);
+  };
+  
+  updateFrame();
+}
+
+function startHurtAnimation() {
+  const avatar = document.getElementById('avatar');
+  if (!avatar) return;
+  
+  const character = 'default_girl';
+  const clothesType = 'default';
+  const basePath = `/static/avatars`;
+  
+  avatar.style.animation = 'none';
+  void avatar.offsetWidth;
+  avatar.style.animation = null;
+  
+  // Start with frame 1
+  document.getElementById('avatar-body').src = `${basePath}/${character}/hurt/hurt1_body.svg`;
+  document.getElementById('avatar-hair').src = `${basePath}/${character}/hurt/hurt1_hair.svg`;
+  document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/hurt1/socks.svg`;
+  document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/hurt1/pants.svg`;
+  document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/hurt1/shoes.svg`;
+  document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/hurt1/shirt.svg`;
+  
+  avatarAnimationInterval = setTimeout(() => {
+    document.getElementById('avatar-body').src = `${basePath}/${character}/hurt/hurt2_body.svg`;
+    document.getElementById('avatar-hair').src = `${basePath}/${character}/hurt/hurt2_hair.svg`;
+    document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/hurt2/socks.svg`;
+    document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/hurt2/pants.svg`;
+    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/hurt2/shoes.svg`;
+    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/hurt2/shirt.svg`;
+    avatarAnimationInterval = null;
+  }, 150);
+}
+
+function startCelebrateAnimation() {
+  const avatar = document.getElementById('avatar');
+  if (!avatar) return;
+  
+  const character = 'default_girl';
+  const clothesType = 'default';
+  const basePath = `/static/avatars`;
+  
+  avatar.style.animation = 'none';
+  void avatar.offsetWidth;
+  avatar.style.animation = null;
+  
+  let frameNum = 1;
+  
+  const updateFrame = () => {
+    document.getElementById('avatar-body').src = `${basePath}/${character}/celebrate/celebrate${frameNum}_body.svg`;
+    document.getElementById('avatar-hair').src = `${basePath}/${character}/celebrate/celebrate${frameNum}_hair.svg`;
+    document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/socks.svg`;
+    document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/pants.svg`;
+    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/shoes.svg`;
+    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/shirt.svg`;
+    
+    frameNum++;
+    if (frameNum > 3) {
+      if (avatarAnimationInterval) {
+        if (typeof avatarAnimationInterval === 'number') {
+          clearTimeout(avatarAnimationInterval);
+        } else {
+          clearInterval(avatarAnimationInterval);
+        }
+        avatarAnimationInterval = null;
+      }
+      if (userProfile) {
+        userProfile.avatar_state = 'idle';
+        updateAvatar('idle');
+      }
+      return;
+    }
+  };
+  
+  createConfetti();
+  updateFrame();
+  avatarAnimationInterval = setInterval(updateFrame, 400);
+}
+
+function createConfetti() {
+  const confettiContainer = document.getElementById('confetti-container');
+  if (!confettiContainer) return;
+  
+  const colors = ['#ff6b9d', '#ffd93d', '#6bcf7f', '#4d9de0', '#e15554', '#ffa500'];
+  const confettiCount = 50;
+  
+  for (let i = 0; i < confettiCount; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.style.left = Math.random() * 100 + '%';
+    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.animationDelay = Math.random() * 0.5 + 's';
+    confetti.style.animationDuration = (Math.random() * 1 + 1.5) + 's';
+    confettiContainer.appendChild(confetti);
+    
+    setTimeout(() => confetti.remove(), 3000);
+  }
 }
 
 // Load tags
@@ -863,6 +1074,15 @@ function updateRecap(data) {
 // check dailies
 async function checkDailies() {
   try {
+    const today = new Date().toDateString();
+    const modalDismissed = localStorage.getItem('pendingItemsModalDismissed');
+    const modalConfirmed = localStorage.getItem('pendingItemsModalConfirmed');
+    
+    // Don't show modal if it was already dismissed or confirmed today
+    if (modalDismissed === today || modalConfirmed === today) {
+      return;
+    }
+    
     const response = await fetch(`${API_BASE}/api/dailies/check`, {
       method: 'GET',
     });
@@ -874,16 +1094,22 @@ async function checkDailies() {
       const uncheckedTasks = data.pending_tasks.filter(item => !item.completed);
       
       if (uncheckedDailies.length > 0 || uncheckedTasks.length > 0) {
-        // Always show the modal if there are pending items
-        const today = new Date().toDateString();
         showPendingItemsModal(uncheckedDailies, uncheckedTasks);
-        // Mark as shown today
-        localStorage.setItem('pendingItemsModalShown', today);
       }
     }
   } catch (error) {
     console.error('Error checking dailies:', error);
   }
+}
+
+// Dismiss pending items modal
+function dismissPendingItemsModal() {
+  const today = new Date().toDateString();
+  localStorage.setItem('pendingItemsModalDismissed', today);
+  closeModal('pendingItemsModal');
+  
+  // Still apply penalties/rewards when dismissed
+  confirmPendingItems();
 }
 
 // Show pending items modal
@@ -981,9 +1207,10 @@ async function confirmPendingItems() {
     });
 
     if (response.ok) {
-      // Mark modal as shown today (already done when modal was opened, but ensure it's set)
+      // Mark modal as confirmed today so it doesn't show again
       const today = new Date().toDateString();
-      localStorage.setItem('pendingItemsModalShown', today);
+      localStorage.setItem('pendingItemsModalConfirmed', today);
+      localStorage.removeItem('pendingItemsModalDismissed');
       
       closeModal('pendingItemsModal');
       loadTasks();
@@ -2013,7 +2240,6 @@ function stopActiveStudySession() {
 // Update Study Stats link color based on active session
 let hasActiveSessionForLink = false;
 
-// Global function to handle stats link clicks (called from onclick in HTML)
 function handleStatsLinkClick(event) {
   if (hasActiveSessionForLink) {
     event.preventDefault();
@@ -2025,10 +2251,23 @@ function handleStatsLinkClick(event) {
   return true;
 }
 
+
+function handleShopLinkClick(event) {
+  if (hasActiveSessionForLink) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    alert('Please finish your active study session before accessing the shop.');
+    return false;
+  }
+  return true;
+}
+
 async function updateStudyStatsLink() {
   const statsLink = document.getElementById('studyStatsLink');
-  if (!statsLink) {
-    // Retry after a short delay if link doesn't exist yet
+  const shopLink = document.getElementById('shopLink');
+  
+  if (!statsLink || !shopLink) {
     setTimeout(updateStudyStatsLink, 100);
     return;
   }
@@ -2047,16 +2286,28 @@ async function updateStudyStatsLink() {
       hasActiveSessionForLink = hasActive;
 
       if (hasActive) {
-        // Gray out the link (like disabled state)
+        // Gray out the stats link
         statsLink.classList.remove('text-gray-700', 'hover:text-black', 'text-black', 'font-bold', 'text-lg');
         statsLink.classList.add('text-gray-400', 'cursor-not-allowed', 'opacity-50');
+        
+        // Gray out the shop link
+        shopLink.classList.remove('text-gray-700', 'hover:text-black', 'text-black', 'font-bold', 'text-lg');
+        shopLink.classList.add('text-gray-400', 'cursor-not-allowed', 'opacity-50');
       } else {
-        // Reset to normal styling
+        // Reset stats link to normal styling
         statsLink.classList.remove('text-gray-400', 'cursor-not-allowed', 'opacity-50');
         if (window.location.pathname === '/stats/') {
           statsLink.classList.add('font-bold', 'text-lg', 'text-black');
         } else {
           statsLink.classList.add('text-gray-700', 'hover:text-black');
+        }
+        
+        // Reset shop link to normal styling
+        shopLink.classList.remove('text-gray-400', 'cursor-not-allowed', 'opacity-50');
+        if (window.location.pathname === '/shop/') {
+          shopLink.classList.add('font-bold', 'text-lg', 'text-black');
+        } else {
+          shopLink.classList.add('text-gray-700', 'hover:text-black');
         }
       }
     }
@@ -2068,7 +2319,7 @@ async function updateStudyStatsLink() {
 // check active study session
 async function checkActiveStudySession() {
   try {
-    // Always check for active session, not just when avatar_state is 'studying'
+    // Always check for active session
     const response = await fetch(`${API_BASE}/api/habits/study/stop/`, {
       method: 'GET',
       headers: {
@@ -2120,10 +2371,10 @@ async function checkActiveStudySession() {
           studySessionMode = restoredMode;
           
           if (restoredMode === 'timer' && restoredDuration > 0) {
-            // Timer mode: set original duration, elapsed will be calculated in display function
+            // Timer mode: set original duration
             studySessionDuration = restoredDuration * 60; // Convert minutes to seconds
           } else {
-            // Stopwatch mode: duration starts at 0, elapsed will be added in display function
+            // Stopwatch mode: duration starts at 0
             studySessionDuration = 0;
           }
           

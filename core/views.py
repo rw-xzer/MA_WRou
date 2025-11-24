@@ -780,8 +780,13 @@ def api_complete_task(request, task_id):
       
       profile.all_time_tasks_completed += 1
 
-      if task.task_type == 'daily' and task.streak > profile.longest_daily_streak:
-        profile.longest_daily_streak = task.streak
+      # Update longest streak
+      if task.task_type == 'daily':
+        max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(
+          max_streak=Max('streak')
+        )['max_streak'] or 0
+        if max_streak > profile.longest_daily_streak:
+          profile.longest_daily_streak = max_streak
       profile.save()
 
       TaskLog.objects.create(task=task, xp_earned=xp, coins_earned=coins)
@@ -1224,7 +1229,14 @@ def api_stat_value(request):
     return JsonResponse({'value': max_streak})
   
   elif stat_type == 'longest_streak':
-    return JsonResponse({'value': profile.longest_daily_streak})
+    max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(
+      max_streak=Max('streak')
+    )['max_streak'] or 0
+    # Update profile
+    if max_streak > profile.longest_daily_streak:
+      profile.longest_daily_streak = max_streak
+      profile.save()
+    return JsonResponse({'value': max(profile.longest_daily_streak, max_streak)})
   
   elif stat_type == 'coins_earned':
     return JsonResponse({'value': profile.all_time_coins_earned})

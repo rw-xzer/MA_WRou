@@ -536,9 +536,9 @@ function renderTagCheckboxes() {
     addTagBtn.addEventListener('click', () => {
       const tagName = customTagInput.value.trim();
       if (tagName) {
-        const normalizedTag = tagName.toLowerCase();
+        const normalized = tagName.toLowerCase();
         const exists = allTags.some(tag => tag.toLowerCase() === normalized);
-        if (!exists) {
+        if(!exists) {
           allTags.push(tagName);
           allTags.sort();
           renderTagCheckboxes();
@@ -1252,7 +1252,6 @@ async function loadStatSlots() {
               'current_streak': 'current streak',
               'longest_streak': 'longest streak',
               'coins_earned': 'coins earned',
-              'level': 'level',
             };
             labelEl.textContent = labels[statType] || '';
           }
@@ -1280,7 +1279,9 @@ function showHabitModal(habitId = null) {
   const form = document.getElementById('habitForm');
   const deleteButton = document.getElementById('habitDeleteButton');
   if (modal && form) {
-    // Clear form if creating new
+    renderTagCheckboxes();
+    
+    // Clear form if creating new habit
     if (!habitId) {
       form.reset();
       form.dataset.habitId = '';
@@ -1300,7 +1301,9 @@ function showTaskModal(taskId = null) {
   const form = document.getElementById('taskForm');
   const deleteButton = document.getElementById('taskDeleteButton');
   if (modal && form) {
-    // Clear form if creating new
+    renderTagCheckboxes();
+    
+    // Clear form if creating new task
     if (!taskId) {
       form.reset();
       form.dataset.taskId = '';
@@ -1324,19 +1327,6 @@ async function editHabit(habitId) {
       return;
     }
 
-    // Populate form
-    document.getElementById('habitTitle').value = habit.title;
-    document.getElementById('habitDetails').value = habit.details || '';
-    document.getElementById('habitDifficulty').value = habit.diff;
-    document.getElementById('habitAllowPositive').checked = habit.allow_pos;
-    document.getElementById('habitAllowNegative').checked = habit.allow_neg;
-    document.getElementById('habitResetFreq').value = habit.reset_freq || 'never';
-
-    // Set tag checkboxes
-    document.querySelectorAll('.habit-tag-checkbox').forEach(checkbox => {
-      checkbox.checked = habit.tags.includes(checkbox.dataset.tag);
-    });
-
     // Set form to edit mode
     const form = document.getElementById('habitForm');
     form.dataset.habitId = habitId;
@@ -1344,6 +1334,21 @@ async function editHabit(habitId) {
     document.querySelector('#habitModal button[type="submit"]').textContent = 'Update';
 
     showHabitModal(habitId);
+
+    // Populate form after modal is shown and tags are rendered
+    document.getElementById('habitTitle').value = habit.title;
+    document.getElementById('habitDetails').value = habit.details || '';
+    document.getElementById('habitDifficulty').value = habit.diff;
+    document.getElementById('habitAllowPositive').checked = habit.allow_pos;
+    document.getElementById('habitAllowNegative').checked = habit.allow_neg;
+    document.getElementById('habitResetFreq').value = habit.reset_freq || 'never';
+
+    // Set tag checkboxes after renderTagCheckboxes has run
+    setTimeout(() => {
+      document.querySelectorAll('.habit-tag-checkbox').forEach(checkbox => {
+        checkbox.checked = habit.tags && habit.tags.includes(checkbox.dataset.tag);
+      });
+    }, 0);
   } catch (error) {
     console.error('Error loading habit for editing:', error);
   }
@@ -1358,16 +1363,19 @@ async function editTask(taskId) {
       return;
     }
 
-    // Populate form
+    // Set form to edit mode
+    const form = document.getElementById('taskForm');
+    form.dataset.taskId = taskId;
+    document.querySelector('#taskModal h3').textContent = 'Edit Task';
+    document.querySelector('#taskModal button[type="submit"]').textContent = 'Update';
+
+    showTaskModal(taskId);
+
+    // Populate form after modal is shown and tags are rendered
     document.getElementById('taskTitle').value = task.title;
     document.getElementById('taskDetails').value = task.details || '';
     document.getElementById('taskType').value = task.task_type;
     document.getElementById('taskDifficulty').value = task.diff;
-    
-    // Set tag checkboxes
-    document.querySelectorAll('.task-tag-checkbox').forEach(checkbox => {
-      checkbox.checked = task.tags.includes(checkbox.dataset.tag);
-    });
 
     // Handle due date
     if (task.due && task.task_type === 'scheduled') {
@@ -1377,14 +1385,13 @@ async function editTask(taskId) {
     }
 
     toggleTaskDateField();
-
-    // Set form to edit mode
-    const form = document.getElementById('taskForm');
-    form.dataset.taskId = taskId;
-    document.querySelector('#taskModal h3').textContent = 'Edit Task';
-    document.querySelector('#taskModal button[type="submit"]').textContent = 'Update';
-
-    showTaskModal(taskId);
+    
+    // Set tag checkboxes after renderTagCheckboxes has run
+    setTimeout(() => {
+      document.querySelectorAll('.task-tag-checkbox').forEach(checkbox => {
+        checkbox.checked = task.tags && task.tags.includes(checkbox.dataset.tag);
+      });
+    }, 0);
   } catch (error) {
     console.error('Error loading task for editing:', error);
   }
@@ -2456,7 +2463,6 @@ async function loadStatValue(slotNum, statType) {
           'current_streak': 'current streak',
           'longest_streak': 'longest streak',
           'coins_earned': 'coins earned',
-          'level': 'level',
         };
         labelEl.textContent = labels[statType] || '';
       }

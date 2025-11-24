@@ -696,17 +696,55 @@ function renderWeeklyDailyChart(ctx) {
         const minutes = startTime.getMinutes();
         const startTimeInHours = hour + minutes / 60;
         const durationHours = (session.duration_minutes || 0) / 60;
+        const endTimeInHours = startTimeInHours + durationHours;
 
-        sessionData.push({
-          x: dayIndex,
-          y: startTimeInHours,
-          width: 0.6,
-          height: durationHours,
-          subject: session.subject,
-          color: session.color || colorLegend[session.subject] || '#3b82f6',
-          startTime: session.start_time,
-          durationMinutes: session.duration_minutes || 0,
-        });
+        // Check if session crosses midnight (goes past 24:00)
+        if (endTimeInHours > 24) {
+          // Split into two parts; 1. end 24:00, 2. start 00:00 next day
+          const hoursUntilMidnight = 24 - startTimeInHours;
+          const hoursAfterMidnight = endTimeInHours - 24;
+          
+          // First
+          sessionData.push({
+            x: dayIndex,
+            y: startTimeInHours,
+            width: 0.6,
+            height: hoursUntilMidnight,
+            subject: session.subject,
+            color: session.color || colorLegend[session.subject] || '#3b82f6',
+            startTime: session.start_time,
+            durationMinutes: session.duration_minutes || 0,
+            isSplit: true,
+            part: 'first',
+          });
+          
+          // Second
+          if (dayIndex < 6) { // Only if not the last day of the week
+            sessionData.push({
+              x: dayIndex + 1,
+              y: 0,
+              width: 0.6,
+              height: hoursAfterMidnight,
+              subject: session.subject,
+              color: session.color || colorLegend[session.subject] || '#3b82f6',
+              startTime: session.start_time,
+              durationMinutes: session.duration_minutes || 0,
+              isSplit: true,
+              part: 'second',
+            });
+          }
+        } else {
+          sessionData.push({
+            x: dayIndex,
+            y: startTimeInHours,
+            width: 0.6,
+            height: durationHours,
+            subject: session.subject,
+            color: session.color || colorLegend[session.subject] || '#3b82f6',
+            startTime: session.start_time,
+            durationMinutes: session.duration_minutes || 0,
+          });
+        }
       });
     }
   });
@@ -739,8 +777,12 @@ function renderWeeklyDailyChart(ctx) {
         
         const hoveredSession = sessionData.find(s => {
           const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
-          const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
-          return dayMatch && timeMatch;
+          // For split sessions, check if we're in the valid time range
+          if (s.isSplit && s.part === 'second') {
+            return dayMatch && timeValue >= 0 && timeValue <= s.height;
+          } else {
+            return dayMatch && timeValue >= s.y && timeValue <= (s.y + s.height);
+          }
         });
         
         if (hoveredSession) {
@@ -798,8 +840,12 @@ function renderWeeklyDailyChart(ctx) {
           
           const clickedSession = sessionData.find(s => {
             const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
-            const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
-            return dayMatch && timeMatch;
+            // For split sessions, check if we're in the valid time range
+            if (s.isSplit && s.part === 'second') {
+              return dayMatch && timeValue >= 0 && timeValue <= s.height;
+            } else {
+              return dayMatch && timeValue >= s.y && timeValue <= (s.y + s.height);
+            }
           });
           
           if (clickedSession) {
@@ -879,8 +925,12 @@ function renderWeeklyDailyChart(ctx) {
           
           const session = sessionData.find(s => {
             const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
-            const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
-            return dayMatch && timeMatch;
+            // For split sessions, check if we're in the valid time range
+            if (s.isSplit && s.part === 'second') {
+              return dayMatch && timeValue >= 0 && timeValue <= s.height;
+            } else {
+              return dayMatch && timeValue >= s.y && timeValue <= (s.y + s.height);
+            }
           });
           
           if (session) {
@@ -929,8 +979,12 @@ function renderWeeklyDailyChart(ctx) {
     
     const session = sessionData.find(s => {
       const dayMatch = Math.abs(s.x - dayIndex) < 0.5;
-      const timeMatch = timeValue >= s.y && timeValue <= (s.y + s.height);
-      return dayMatch && timeMatch;
+      // For split sessions, check if we're in the valid time range
+      if (s.isSplit && s.part === 'second') {
+        return dayMatch && timeValue >= 0 && timeValue <= s.height;
+      } else {
+        return dayMatch && timeValue >= s.y && timeValue <= (s.y + s.height);
+      }
     });
     
     if (session) {
@@ -962,6 +1016,7 @@ function renderWeeklyDailyChart(ctx) {
 // Render subject comparison chart
 function renderSubjectChart() {
   const ctx = document.getElementById('subjectChart').getContext('2d');
+  const container = document.getElementById('subjectChartContainer');
 
   if (subjectChart) {
     subjectChart.destroy();
@@ -977,7 +1032,7 @@ function renderSubjectChart() {
     // Only show subjects that have hours in this week
     subjects = Object.keys(bySubject).filter(s => bySubject[s] > 0).sort((a, b) => bySubject[b] - bySubject[a]);
   } else {
-    // Monthly view: show all subjects from color legend, even with 0 hours
+    // Monthly view show all subjects from color legend
     const allSubjects = Object.keys(colorLegend).sort();
     allSubjects.forEach(subject => {
       if (!(subject in bySubject)) {
@@ -989,6 +1044,15 @@ function renderSubjectChart() {
   const data = subjects.map(s => bySubject[s]);
   const colors = subjects.map(s => colorLegend[s] || '#3b82f6');
 
+  const fixedBarHeight = 32;
+  const minHeight = 128;
+  const padding = 80;
+  const calculatedHeight = Math.max(minHeight, subjects.length * fixedBarHeight + padding);
+  
+  if (container) {
+    container.style.height = `${calculatedHeight}px`;
+  }
+
   subjectChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -999,6 +1063,7 @@ function renderSubjectChart() {
         backgroundColor: colors,
         borderColor: colors.map(c => c),
         borderWidth: 1,
+        maxBarThickness: fixedBarHeight,
       }],
     },
     options: {
@@ -1032,6 +1097,11 @@ function renderSubjectChart() {
             display: true,
             text: 'Subject',
           },
+          ticks: {
+            autoSkip: false,
+          },
+          categoryPercentage: 0.8,
+          barPercentage: 1.0,
         },
       },
     },
@@ -1113,54 +1183,95 @@ async function showColorOrganizationModal() {
     return;
   }
   
+  const preservedColorLegend = Object.keys(colorLegend).length > 0 ? { ...colorLegend } : null;
+  const preservedRenames = Object.keys(subjectRenames).length > 0 ? { ...subjectRenames } : null;
+  
   listEl.innerHTML = '';
-  subjectRenames = {};
 
   try {
     const response = await fetch(`${API_BASE}/api/study/colors`);
     if (response.ok) {
       const data = await response.json();
-      const currentMonthColorLegend = data.color_legend || {};
-      const subjects = Object.keys(currentMonthColorLegend).sort();
-      console.log('Subjects in current month color legend:', subjects);
+      const apiColorLegend = data.color_legend || {};
       
-      const modalColorLegend = currentMonthColorLegend;
+      // Start with API data
+      let modalColorLegend = { ...apiColorLegend };
       
-      subjects.forEach(subject => {
-    // Track original name
-    if (!(subject in subjectRenames)) {
-      subjectRenames[subject] = subject;
-    }
-    const item = document.createElement('div');
-    item.className = 'flex items-center gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50';
-    
-    // Color circle
-    const colorCircle = document.createElement('button');
-    colorCircle.type = 'button';
-    colorCircle.className = 'h-8 w-8 rounded-full border-2 border-gray-300 hover:scale-110 transition-transform flex-shrink-0';
-    colorCircle.style.backgroundColor = modalColorLegend[subject] || '#3b82f6';
-    colorCircle.dataset.subject = subject;
-    colorCircle.title = 'Click to change color';
-    colorCircle.addEventListener('click', () => {
-      colorLegend = modalColorLegend;
-      showColorPickerForSubject(subject);
-    });
-    
-    // Subject name
-    const subjectName = document.createElement('div');
-    subjectName.className = 'flex-1 cursor-pointer px-2 py-1 rounded hover:bg-gray-100';
-    subjectName.textContent = subject;
-    subjectName.dataset.subject = subject;
-    subjectName.addEventListener('click', () => {
-      renameSubject(subject);
-    });
-    
-    item.appendChild(colorCircle);
-    item.appendChild(subjectName);
-    listEl.appendChild(item);
+      if (preservedRenames) {
+        subjectRenames = { ...preservedRenames };
+        
+        // For each rename update modalColorLegend
+        Object.keys(subjectRenames).forEach(newName => {
+          const originalName = subjectRenames[newName];
+          if (originalName !== newName) {
+            if (modalColorLegend[originalName]) {
+              delete modalColorLegend[originalName];
+            }
+            // Add new name with color
+            if (preservedColorLegend && preservedColorLegend[newName]) {
+              modalColorLegend[newName] = preservedColorLegend[newName];
+            } else if (apiColorLegend[originalName]) {
+              modalColorLegend[newName] = apiColorLegend[originalName];
+            }
+          }
+        });
+      } else {
+        // No preserved renames
+        subjectRenames = {};
+        Object.keys(modalColorLegend).forEach(subject => {
+          subjectRenames[subject] = subject;
+        });
+      }
+      
+      // Apply any other color changes
+      if (preservedColorLegend) {
+        Object.keys(preservedColorLegend).forEach(subject => {
+          // Check if renamed subject
+          const isRenamed = preservedRenames && subject in preservedRenames && preservedRenames[subject] !== subject;
+          
+          if (!isRenamed) {
+            modalColorLegend[subject] = preservedColorLegend[subject];
+          }
+        });
+      }
+      
+      Object.keys(modalColorLegend).forEach(subject => {
+        if (!(subject in subjectRenames)) {
+          subjectRenames[subject] = subject;
+        }
       });
       
-      // Update the global colorLegend for saving
+      const subjects = Object.keys(modalColorLegend).sort();
+      console.log('Subjects in modal color legend:', subjects);
+      
+      subjects.forEach(subject => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50';
+        
+        // Color circle
+        const colorCircle = document.createElement('button');
+        colorCircle.type = 'button';
+        colorCircle.className = 'h-8 w-8 rounded-full border-2 border-gray-300 hover:scale-110 transition-transform flex-shrink-0';
+        colorCircle.style.backgroundColor = modalColorLegend[subject] || '#3b82f6';
+        colorCircle.dataset.subject = subject;
+        colorCircle.title = 'Click to change color';
+        colorCircle.addEventListener('click', () => {
+          showColorPickerForSubject(subject);
+        });
+        
+        // Subject name
+        const subjectName = document.createElement('div');
+        subjectName.className = 'flex-1 cursor-pointer px-2 py-1 rounded hover:bg-gray-100';
+        subjectName.textContent = subject;
+        subjectName.dataset.subject = subject;
+        subjectName.addEventListener('click', () => {
+          renameSubject(subject);
+        });
+        
+        item.appendChild(colorCircle);
+        item.appendChild(subjectName);
+        listEl.appendChild(item);
+      });
       colorLegend = modalColorLegend;
     } else {
       console.error('Failed to load current month colors');
@@ -1284,9 +1395,10 @@ function showShadesForColorPicker(subject, colorIndex, baseColor, content) {
     }
     
     btn.addEventListener('click', () => {
+      // Update the global colorLegend
       colorLegend[subject] = shade;
       closeModal('colorPickerModal');
-      showColorOrganizationModal(); // Refresh the list
+      showColorOrganizationModal();
     });
     shadeContainer.appendChild(btn);
   });

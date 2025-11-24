@@ -11,6 +11,7 @@ from django.db.models.functions import TruncDate
 from datetime import datetime, timedelta
 import json
 import random
+import logging
 
 from .models import (
     UserProfile,
@@ -26,6 +27,40 @@ from .models import (
     ShopItem,
     UserPurchase,
 )
+
+# Background colors
+BACKGROUND_COLORS = {
+  'bg_blue_background': {
+    'name': 'Blue Background',
+    'display_name': 'Blue',
+    'color': '#93c5fd',
+    'floor_color': '#3b82f6'
+  },
+  'bg_green_background': {
+    'name': 'Green Background',
+    'display_name': 'Green',
+    'color': '#86efac',
+    'floor_color': '#22c55e'
+  },
+  'bg_yellow_background': {
+    'name': 'Yellow Background',
+    'display_name': 'Yellow',
+    'color': '#fde047',
+    'floor_color': '#eab308'
+  },
+  'bg_purple_background': {
+    'name': 'Purple Background',
+    'display_name': 'Purple',
+    'color': '#c4b5fd',
+    'floor_color': '#8b5cf6'
+  },
+  'bg_gray_background': {
+    'name': 'Gray Background',
+    'display_name': 'Gray',
+    'color': '#d1d5db',
+    'floor_color': '#6b7280'
+  },
+}
 
 def login_view(request):
   """Login view"""
@@ -88,7 +123,25 @@ def api_user_profile(request):
     data = json.loads(request.body) if request.body else {}
     if 'avatar_state' in data:
       profile.avatar_state = data['avatar_state']
-      profile.save()
+    if 'avatar_background_color' in data:
+      profile.avatar_background_color = data['avatar_background_color']
+      if profile.coins >= 50:
+        profile.coins -= 50
+    if 'avatar_floor_color' in data:
+      profile.avatar_floor_color = data['avatar_floor_color']
+    if 'avatar_character' in data:
+      profile.avatar_character = data['avatar_character']
+    if 'avatar_clothes' in data:
+      profile.avatar_clothes = data['avatar_clothes']
+    if 'avatar_shirt' in data:
+      profile.avatar_shirt = data['avatar_shirt']
+    if 'avatar_pants' in data:
+      profile.avatar_pants = data['avatar_pants']
+    if 'avatar_socks' in data:
+      profile.avatar_socks = data['avatar_socks']
+    if 'avatar_shoes' in data:
+      profile.avatar_shoes = data['avatar_shoes']
+    profile.save()
   
   return JsonResponse({
     'level': profile.level,
@@ -99,6 +152,14 @@ def api_user_profile(request):
     'coins': profile.coins,
     'avatar': profile.avatar,
     'avatar_state': profile.avatar_state,
+    'avatar_background_color': getattr(profile, 'avatar_background_color', None) or '#d8b9b9',
+    'avatar_floor_color': getattr(profile, 'avatar_floor_color', None) or '#d8aeae',
+    'avatar_character': getattr(profile, 'avatar_character', None) or 'default_girl',
+    'avatar_clothes': getattr(profile, 'avatar_clothes', None) or 'default',
+    'avatar_shirt': getattr(profile, 'avatar_shirt', None) or 'default',
+    'avatar_pants': getattr(profile, 'avatar_pants', None) or 'default',
+    'avatar_socks': getattr(profile, 'avatar_socks', None) or 'default',
+    'avatar_shoes': getattr(profile, 'avatar_shoes', None) or 'default',
     })
 
 @login_required
@@ -106,7 +167,6 @@ def api_user_profile(request):
 def api_habits(request):
   """Get user habits"""
   filter_type = request.GET.get('filter', 'all')
-  # 
   search_query = request.GET.get('search', '').strip()
   tag_filter = request.GET.get('tag', '').strip()
   
@@ -462,10 +522,6 @@ def api_stop_study_session(request):
       response_data['subject'] = session.subject
       response_data['color'] = session.color or '#3b82f6'
       response_data['start_time'] = session.start_time.isoformat()
-      # Try to get mode and duration from session if stored
-      # For now, we'll need to infer or store these separately
-      # Check if there's a way to get mode/duration from the session
-      # If not available, we'll need to add these fields to the model or store them differently
     return JsonResponse(response_data)
 
   if session:
@@ -990,8 +1046,6 @@ def api_reset_dailies(request):
 @require_http_methods(["GET"])
 def api_last_week_recap(request):
   """Generate last week recap with standout stats algorithm"""
-  TESTING_MODE = False  # Set to False for normal operation - shows all placeholder boxes when True
-  
   now = timezone.now()
   today = now.date()
   
@@ -1119,21 +1173,21 @@ def api_last_week_recap(request):
       'score': level_ups_count * 15
     })
 
-  # Best habit (highest positive to negative ratio)
-  habits = Habit.objects.filter(user=request.user)
-  for habit in habits:
-    total = habit.pos_count + habit.neg_count
-    if total >= 5: # Minimum activity
-      ratio = habit.pos_count /total if total > 0 else 0
-      if ratio >= 0.8:
-        standout_items.append({
-          'type': 'habit_ratio',
-          'title': habit.title,
-          'description': f"{int(ratio * 100)}% positive",
-          'icon': 'star',
-          'score': int(ratio * 100)
-        })
-        break
+  # Best habit (highest positive to negative ratio) - removed, no longer showing thumbs-up items
+  # habits = Habit.objects.filter(user=request.user)
+  # for habit in habits:
+  #   total = habit.pos_count + habit.neg_count
+  #   if total >= 5: # Minimum activity
+  #     ratio = habit.pos_count /total if total > 0 else 0
+  #     if ratio >= 0.8:
+  #       standout_items.append({
+  #         'type': 'habit_ratio',
+  #         'title': habit.title,
+  #         'description': f"{int(ratio * 100)}% positive",
+  #         'icon': 'star',
+  #         'score': int(ratio * 100)
+  #       })
+  #       break
 
   # Sort by score
   standout_items.sort(key=lambda x: x['score'], reverse=True)
@@ -1272,10 +1326,14 @@ def api_tags(request):
 @require_http_methods(["GET"])
 def api_shop_items(request):
   """Get shop items"""
-  items = ShopItem.objects.filter(active=True)
-  items_data = []
-  for item in items:
-    items_data.append({
+  # Get user's purchased items
+  purchased_item_ids = set(UserPurchase.objects.filter(user=request.user).values_list('item_id', flat=True))
+  
+  # Get user-defined items
+  user_items = ShopItem.objects.filter(user=request.user, active=True, item_type='character')
+  user_items_data = []
+  for item in user_items:
+    user_items_data.append({
       'id': item.id,
       'name': item.name,
       'description': item.description,
@@ -1283,8 +1341,71 @@ def api_shop_items(request):
       'price': item.price,
       'image_url': item.image_url,
     })
+  
+  # Get customization items
+  customization_items = ShopItem.objects.filter(active=True, item_type='customization').exclude(id__in=purchased_item_ids)
+  customization_items_data = []
+  for item in customization_items:
+    customization_items_data.append({
+      'id': item.id,
+      'name': item.name,
+      'description': item.description,
+      'item_type': item.item_type,
+      'price': item.price,
+      'image_url': item.image_url,
+    })
+  
+  # Add default background color items
+  background_colors = [
+    {
+      'name': bg_data['name'],
+      'color': bg_data['color'],
+      'floor_color': bg_data['floor_color']
+    }
+    for bg_id, bg_data in BACKGROUND_COLORS.items()
+  ]
+  
+  # Refresh profile to ensure we have latest data
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  profile = UserProfile.objects.get(user=request.user)
+  current_bg = getattr(profile, 'avatar_background_color', None) or None
+  
+  # Get purchased backgrounds from profile
+  purchased_background_ids = set()
+  if hasattr(profile, 'purchased_backgrounds') and profile.purchased_backgrounds:
+    try:
+      purchased_backgrounds_list = json.loads(profile.purchased_backgrounds) if isinstance(profile.purchased_backgrounds, str) else profile.purchased_backgrounds
+      purchased_background_ids = set(purchased_backgrounds_list)
+    except:
+      purchased_background_ids = set()
+  
+  for bg in background_colors:
+    bg_id = f'bg_{bg["name"].lower().replace(" ", "_")}'
+    
+    # Check if this background was purchased
+    bg_purchased = bg_id in purchased_background_ids
+    
+    # Don't show default background in shop
+    is_default = bg['color'] == '#d8b9b9'
+    
+    should_show = bg_id not in purchased_item_ids and not bg_purchased and not is_default
+    
+    if should_show:
+      customization_items_data.append({
+        'id': bg_id,
+        'name': bg['name'],
+        'description': 'Customize your avatar background color',
+        'item_type': 'customization',
+        'price': 50,
+        'image_url': '',
+        'background_color': bg['color'],
+        'floor_color': bg['floor_color'],
+      })
 
-  return JsonResponse({'items': items_data})
+  return JsonResponse({
+    'user_items': user_items_data,
+    'customization_items': customization_items_data
+  })
 
 @login_required
 @csrf_exempt
@@ -1295,6 +1416,52 @@ def api_purchase_item(request):
   item_id = data.get('item_id')
 
   try:
+    # Handle background color purchases (virtual items)
+    if isinstance(item_id, str) and item_id.startswith('bg_'):
+      profile, _ = UserProfile.objects.get_or_create(user=request.user)
+      price = 50
+      
+      if profile.coins < price:
+        return JsonResponse({'error': 'Insufficient coins'}, status=400)
+      
+      # Get background from constant
+      bg = None
+      if item_id in BACKGROUND_COLORS:
+        bg_data = BACKGROUND_COLORS[item_id]
+        bg = {
+          'color': bg_data['color'],
+          'floor_color': bg_data['floor_color']
+        }
+      
+      if not bg:
+        return JsonResponse({'error': 'Background not found'}, status=404)
+      
+      # Deduct coins but DON'T auto-equip - user must equip manually from inventory
+      profile.coins -= price
+      
+      # Track purchased background in a JSON field
+      # Get or initialize purchased_backgrounds list
+      purchased_backgrounds = []
+      if hasattr(profile, 'purchased_backgrounds') and profile.purchased_backgrounds:
+        try:
+          purchased_backgrounds = json.loads(profile.purchased_backgrounds) if isinstance(profile.purchased_backgrounds, str) else profile.purchased_backgrounds
+        except:
+          purchased_backgrounds = []
+      
+      # Add this background ID if not already in list
+      if item_id not in purchased_backgrounds:
+        purchased_backgrounds.append(item_id)
+        # Store as JSON string
+        profile.purchased_backgrounds = json.dumps(purchased_backgrounds)
+      
+      profile.save()
+      
+      return JsonResponse({
+        'success': True, 
+        'coins_left': profile.coins
+      })
+    
+    # Handle regular shop items
     item = ShopItem.objects.get(id=item_id, active=True)
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
@@ -1310,6 +1477,220 @@ def api_purchase_item(request):
     
   except ShopItem.DoesNotExist:
     return JsonResponse({'error': 'Item not found'}, status=404)
+  except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Error purchasing item: {str(e)}", exc_info=True)
+    return JsonResponse({'error': f'Purchase failed: {str(e)}'}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_create_reward(request):
+  """Create a new user-defined reward"""
+  logger = logging.getLogger(__name__)
+  try:
+    data = json.loads(request.body)
+    
+    name = data.get('name', '').strip()
+    description = data.get('description', '').strip()
+    try:
+      price = int(data.get('price', 0))
+    except (ValueError, TypeError):
+      return JsonResponse({'error': 'Price must be a valid number'}, status=400)
+    
+    if not name:
+      return JsonResponse({'error': 'Name is required'}, status=400)
+    
+    if price < 1:
+      return JsonResponse({'error': 'Price must be at least 1'}, status=400)
+    
+    reward = ShopItem.objects.create(
+      user=request.user,
+      name=name,
+      description=description or '',
+      price=price,
+      item_type='character',
+      active=True
+    )
+    
+    return JsonResponse({
+      'id': reward.id,
+      'success': True
+    })
+  except ValueError as e:
+    logger.error(f"Invalid data creating reward: {str(e)}", exc_info=True)
+    return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
+  except Exception as e:
+    logger.error(f"Error creating reward: {str(e)}", exc_info=True)
+    return JsonResponse({'error': f'Failed to create reward: {str(e)}'}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["PUT"])
+def api_update_reward(request, reward_id):
+  """Update an existing user-defined reward"""
+  try:
+    reward = ShopItem.objects.get(id=reward_id, user=request.user, item_type='character')
+    data = json.loads(request.body)
+    
+    if 'name' in data:
+      reward.name = data['name'].strip()
+    if 'description' in data:
+      reward.description = data.get('description', '').strip()
+    if 'price' in data:
+      price = data.get('price', 0)
+      if price < 1:
+        return JsonResponse({'error': 'Price must be at least 1'}, status=400)
+      reward.price = price
+    
+    reward.save()
+    
+    return JsonResponse({
+      'id': reward.id,
+      'success': True
+    })
+  except ShopItem.DoesNotExist:
+    return JsonResponse({'error': 'Reward not found'}, status=404)
+  except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Error updating reward: {str(e)}", exc_info=True)
+    return JsonResponse({'error': f'Failed to update reward: {str(e)}'}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def api_delete_reward(request, reward_id):
+  """Delete a user-defined reward"""
+  try:
+    reward = ShopItem.objects.get(id=reward_id, user=request.user, item_type='character')
+    reward.delete()
+    
+    return JsonResponse({'success': True})
+  except ShopItem.DoesNotExist:
+    return JsonResponse({'error': 'Reward not found'}, status=404)
+  except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Error deleting reward: {str(e)}", exc_info=True)
+    return JsonResponse({'error': f'Failed to delete reward: {str(e)}'}, status=500)
+
+@login_required
+@require_http_methods(["GET"])
+def api_owned_customization(request):
+  """Get user's owned customization items"""
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  # Refresh profile to ensure we have latest data
+  profile.refresh_from_db()
+  
+  # Get purchased shop items
+  purchased_items = UserPurchase.objects.filter(user=request.user).select_related('item')
+  owned_items = {
+    'avatars': [],
+    'shirts': [],
+    'pants': [],
+    'socks': [],
+    'shoes': [],
+    'backgrounds': []
+  }
+  
+  # Default items
+  owned_items['avatars'].append({
+    'id': 'default_girl',
+    'name': 'Default Girl',
+    'type': 'avatar',
+    'is_default': True
+  })
+  
+  owned_items['shirts'].append({
+    'id': 'default',
+    'name': 'Default Shirt',
+    'type': 'shirt',
+    'is_default': True
+  })
+  
+  owned_items['pants'].append({
+    'id': 'default',
+    'name': 'Default Pants',
+    'type': 'pants',
+    'is_default': True
+  })
+  
+  owned_items['socks'].append({
+    'id': 'default',
+    'name': 'Default Socks',
+    'type': 'socks',
+    'is_default': True
+  })
+  
+  owned_items['shoes'].append({
+    'id': 'default',
+    'name': 'Default Shoes',
+    'type': 'shoes',
+    'is_default': True
+  })
+  
+  # Default background
+  owned_items['backgrounds'].append({
+    'id': 'default',
+    'name': 'Default',
+    'color': '#d8b9b9',
+    'floor_color': '#d8aeae',
+    'type': 'background',
+    'is_default': True
+  })
+  
+  # Add purchased backgrounds
+  # Use the constant for background colors
+  background_colors = BACKGROUND_COLORS
+  
+  # Get purchased backgrounds from profile
+  purchased_background_ids = set()
+  if hasattr(profile, 'purchased_backgrounds') and profile.purchased_backgrounds:
+    try:
+      purchased_backgrounds_list = json.loads(profile.purchased_backgrounds) if isinstance(profile.purchased_backgrounds, str) else profile.purchased_backgrounds
+      purchased_background_ids = set(purchased_backgrounds_list)
+    except:
+      purchased_background_ids = set()
+  
+  # Add all purchased to owned
+  for bg_id in purchased_background_ids:
+    if bg_id in background_colors:
+      bg_data = background_colors[bg_id]
+      if not any(bg['id'] == bg_id for bg in owned_items['backgrounds']):
+        owned_items['backgrounds'].append({
+          'id': bg_id,
+          'name': bg_data['name'],
+          'color': bg_data['color'],
+          'floor_color': bg_data['floor_color'],
+          'type': 'background',
+          'is_default': False
+        })
+  
+  current_bg = getattr(profile, 'avatar_background_color', None) or None
+  if current_bg:
+    current_bg_str = str(current_bg).strip().lower()
+    if current_bg_str != '#d8b9b9':
+      for bg_id, bg_data in background_colors.items():
+        bg_color_normalized = str(bg_data['color']).strip().lower()
+        if current_bg_str == bg_color_normalized:
+          # Add if not already in list
+          if not any(bg['id'] == bg_id for bg in owned_items['backgrounds']):
+            owned_items['backgrounds'].append({
+              'id': bg_id,
+              'name': bg_data['name'],
+              'color': bg_data['color'],
+              'floor_color': bg_data['floor_color'],
+              'type': 'background',
+              'is_default': False
+            })
+  
+  # Add purchased shop items
+  for purchase in purchased_items:
+    item = purchase.item
+    if item.item_type == 'customization':
+      # Future: add clothing/avatar items here
+      pass
+  
+  return JsonResponse({'owned_items': owned_items})
   
 @login_required
 @require_http_methods(["GET"])

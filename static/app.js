@@ -200,7 +200,8 @@ function updateUserProfile(isInitialLoad = false) {
   }
 
   if (healthText) healthText.textContent = `${userProfile.hp}/${userProfile.max_hp}`;
-  if (xpText) xpText.textContent = `Lv.${userProfile.level} ${userProfile.xp}/${userProfile.max_xp}`;
+  if (xpText) xpText.textContent = `${userProfile.xp}/${userProfile.max_xp}`;
+  if (lvlText) lvlText.textContent = `Lv. ${userProfile.level}`;
   
   // Ensure coins text is always set and visible
   if (coinsText) {
@@ -216,6 +217,37 @@ function updateUserProfile(isInitialLoad = false) {
         coinsText.textContent = `Coins: ${coinsValue}`;
       }
     }, 0);
+  }
+
+  // Update avatar background colors
+  const avatarSection = document.querySelector('#avatar')?.closest('section');
+  const avatarFloor = document.getElementById('avatar-floor');
+  const healthXpSection = document.getElementById('healthXpSection');
+  
+  const bgColor = userProfile.avatar_background_color || '#d8b9b9';
+  const floorColor = userProfile.avatar_floor_color || '#d8aeae';
+  
+  // Darken background color for health/XP section
+  function darkenColor(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.max(0, Math.floor((num >> 16) * (1 - percent)));
+    const g = Math.max(0, Math.floor(((num >> 8) & 0x00FF) * (1 - percent)));
+    const b = Math.max(0, Math.floor((num & 0x0000FF) * (1 - percent)));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  }
+  
+  if (avatarSection) {
+    avatarSection.style.backgroundColor = bgColor;
+  }
+  if (healthXpSection) {
+    const darkBgColor = darkenColor(bgColor, 0.25);
+    healthXpSection.style.backgroundColor = darkBgColor;
+  }
+  if (avatarFloor) {
+    avatarFloor.style.backgroundColor = floorColor;
+    // Calculate a slightly darker color for border
+    const borderColor = floorColor;
+    avatarFloor.style.borderTopColor = borderColor;
   }
 
   // Update avatar state
@@ -304,8 +336,11 @@ function startIdleAnimation() {
   const avatar = document.getElementById('avatar');
   if (!avatar) return;
   
-  const character = 'default_girl';
-  const clothesType = 'default';
+  const character = userProfile?.avatar_character || 'default_girl';
+  const shirt = userProfile?.avatar_shirt || 'default';
+  const pants = userProfile?.avatar_pants || 'default';
+  const socks = userProfile?.avatar_socks || 'default';
+  const shoes = userProfile?.avatar_shoes || 'default';
   
   avatar.style.animation = 'none';
   void avatar.offsetWidth;
@@ -319,10 +354,10 @@ function startIdleAnimation() {
     
     document.getElementById('avatar-body').src = `${basePath}/${character}/idle/idle${frameNum}_body.svg`;
     document.getElementById('avatar-hair').src = `${basePath}/${character}/idle/idle${frameNum}_hair.svg`;
-    document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/socks.svg`;
-    document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/pants.svg`;
-    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/shoes.svg`;
-    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/idle${frameNum}/shirt.svg`;
+    document.getElementById('avatar-socks').src = `${basePath}/clothes/${socks}/idle${frameNum}/socks.svg`;
+    document.getElementById('avatar-pants').src = `${basePath}/clothes/${pants}/idle${frameNum}/pants.svg`;
+    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${shoes}/idle${frameNum}/shoes.svg`;
+    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${shirt}/idle${frameNum}/shirt.svg`;
     
     const baseDelay = 750;
     const delay = frameNum === 1 ? baseDelay * 2 : baseDelay;
@@ -347,29 +382,31 @@ function startHurtAnimation() {
   const avatar = document.getElementById('avatar');
   if (!avatar) return;
   
-  const character = 'default_girl';
-  const clothesType = 'default';
+  const character = userProfile?.avatar_character || 'default_girl';
+  const shirt = userProfile?.avatar_shirt || 'default';
+  const pants = userProfile?.avatar_pants || 'default';
+  const socks = userProfile?.avatar_socks || 'default';
+  const shoes = userProfile?.avatar_shoes || 'default';
   const basePath = `/static/avatars`;
   
   avatar.style.animation = 'none';
   void avatar.offsetWidth;
   avatar.style.animation = null;
   
-  // Start with frame 1
   document.getElementById('avatar-body').src = `${basePath}/${character}/hurt/hurt1_body.svg`;
   document.getElementById('avatar-hair').src = `${basePath}/${character}/hurt/hurt1_hair.svg`;
-  document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/hurt1/socks.svg`;
-  document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/hurt1/pants.svg`;
-  document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/hurt1/shoes.svg`;
-  document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/hurt1/shirt.svg`;
+  document.getElementById('avatar-socks').src = `${basePath}/clothes/${socks}/hurt1/socks.svg`;
+  document.getElementById('avatar-pants').src = `${basePath}/clothes/${pants}/hurt1/pants.svg`;
+  document.getElementById('avatar-shoes').src = `${basePath}/clothes/${shoes}/hurt1/shoes.svg`;
+  document.getElementById('avatar-shirt').src = `${basePath}/clothes/${shirt}/hurt1/shirt.svg`;
   
   avatarAnimationInterval = setTimeout(() => {
     document.getElementById('avatar-body').src = `${basePath}/${character}/hurt/hurt2_body.svg`;
     document.getElementById('avatar-hair').src = `${basePath}/${character}/hurt/hurt2_hair.svg`;
-    document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/hurt2/socks.svg`;
-    document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/hurt2/pants.svg`;
-    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/hurt2/shoes.svg`;
-    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/hurt2/shirt.svg`;
+    document.getElementById('avatar-socks').src = `${basePath}/clothes/${socks}/hurt2/socks.svg`;
+    document.getElementById('avatar-pants').src = `${basePath}/clothes/${pants}/hurt2/pants.svg`;
+    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${shoes}/hurt2/shoes.svg`;
+    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${shirt}/hurt2/shirt.svg`;
     avatarAnimationInterval = null;
   }, 150);
 }
@@ -378,8 +415,11 @@ function startCelebrateAnimation() {
   const avatar = document.getElementById('avatar');
   if (!avatar) return;
   
-  const character = 'default_girl';
-  const clothesType = 'default';
+  const character = userProfile?.avatar_character || 'default_girl';
+  const shirt = userProfile?.avatar_shirt || 'default';
+  const pants = userProfile?.avatar_pants || 'default';
+  const socks = userProfile?.avatar_socks || 'default';
+  const shoes = userProfile?.avatar_shoes || 'default';
   const basePath = `/static/avatars`;
   
   avatar.style.animation = 'none';
@@ -391,10 +431,10 @@ function startCelebrateAnimation() {
   const updateFrame = () => {
     document.getElementById('avatar-body').src = `${basePath}/${character}/celebrate/celebrate${frameNum}_body.svg`;
     document.getElementById('avatar-hair').src = `${basePath}/${character}/celebrate/celebrate${frameNum}_hair.svg`;
-    document.getElementById('avatar-socks').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/socks.svg`;
-    document.getElementById('avatar-pants').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/pants.svg`;
-    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/shoes.svg`;
-    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${clothesType}/celebrate${frameNum}/shirt.svg`;
+    document.getElementById('avatar-socks').src = `${basePath}/clothes/${socks}/celebrate${frameNum}/socks.svg`;
+    document.getElementById('avatar-pants').src = `${basePath}/clothes/${pants}/celebrate${frameNum}/pants.svg`;
+    document.getElementById('avatar-shoes').src = `${basePath}/clothes/${shoes}/celebrate${frameNum}/shoes.svg`;
+    document.getElementById('avatar-shirt').src = `${basePath}/clothes/${shirt}/celebrate${frameNum}/shirt.svg`;
     
     frameNum++;
     if (frameNum > 3) {
@@ -980,12 +1020,75 @@ async function completeTask(taskId, isChecked) {
 
 // load recap
 async function loadRecap() {
+  // Get username from the page 
+  const usernameElement = document.querySelector('nav span');
+  const username = usernameElement ? usernameElement.textContent.replace('Hello, ', '').trim() : 'unknown';
+  
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday etc
+  
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const lastMonday = new Date(today);
+  lastMonday.setDate(today.getDate() - daysSinceMonday);
+  lastMonday.setHours(0, 0, 0, 0);
+  const lastMondayKey = lastMonday.toISOString().split('T')[0];
+  
+  // Check for cached recap
+  const cacheKey = `recap_${username}_${lastMondayKey}`;
+  const cachedRecap = localStorage.getItem(cacheKey);
+  const cachedDate = localStorage.getItem(`recap_date_${username}_${lastMondayKey}`);
+  
+  // use cached data
+  if (cachedRecap && cachedDate === lastMondayKey && dayOfWeek !== 1) {
+    try {
+      const data = JSON.parse(cachedRecap);
+      updateRecap(data);
+      return;
+    } catch (error) {
+      console.error('Error parsing cached recap:', error);
+    }
+  }
+  
+  // Load new recap
   try {
     const response = await fetch(`${API_BASE}/api/recap/`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch recap');
+    }
     const data = await response.json();
     updateRecap(data);
+    
+    // Cache the recap for this week (with username)
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+    localStorage.setItem(`recap_date_${username}_${lastMondayKey}`, lastMondayKey);
+    
+    // Clean up old recap caches for this user
+    const twoWeeksAgo = new Date(lastMonday);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`recap_${username}_`) && !key.startsWith(`recap_date_${username}_`)) {
+        const dateStr = key.replace(`recap_${username}_`, '');
+        const cacheDate = new Date(dateStr);
+        if (cacheDate < twoWeeksAgo) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(`recap_date_${username}_${dateStr}`);
+        }
+      }
+    }
   } catch (error) {
     console.error('Error loading recap:', error);
+    const recapText = document.getElementById('recapText');
+    if (recapText) {
+      recapText.textContent = 'Unable to load recap.';
+    }
+    if (cachedRecap) {
+      try {
+        const data = JSON.parse(cachedRecap);
+        updateRecap(data);
+      } catch (e) {
+      }
+    }
   }
 }
 
@@ -1031,8 +1134,8 @@ function updateRecap(data) {
     }
     
     data.items.forEach(item => {
-      // Filter out habit completion highlights
-      if (item.type === 'habit') {
+      // Filter out habit completion highlights and thumbs-up items
+      if (item.type === 'habit' || item.icon === 'thumbs-up') {
         return;
       }
       
@@ -1040,7 +1143,6 @@ function updateRecap(data) {
       card.className = 'flex-shrink-0 flex items-center gap-2 rounded-lg border border-black bg-white px-4 py-2';
       
       let iconSvg = '';
-      console.log('Highlight item:', item.type, 'icon:', item.icon, 'title:', item.title);
       if (item.icon === 'clock') {
         iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" class="h-6 w-6 flex-shrink-0"><!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M528 320C528 434.9 434.9 528 320 528C205.1 528 112 434.9 112 320C112 205.1 205.1 112 320 112C434.9 112 528 205.1 528 320zM64 320C64 461.4 178.6 576 320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320zM296 184L296 320C296 328 300 335.5 306.7 340L402.7 404C413.7 411.4 428.6 408.4 436 397.3C443.4 386.2 440.4 371.4 429.3 364L344 307.2L344 184C344 170.7 333.3 160 320 160C306.7 160 296 170.7 296 184z"/></svg>';
       } else if (item.icon === 'clipboard') {
@@ -1061,12 +1163,22 @@ function updateRecap(data) {
     });
   } else {
     if (statBoxesContainer) {
-      statBoxesContainer.style.display = 'none';
+      statBoxesContainer.style.display = 'flex';
+    }
+
+    if (hoursCard && data.hours_studied !== undefined) {
+      hoursCard.textContent = `${data.hours_studied} hours studied last week`;
+    }
+    if (tasksCard && data.tasks_completed !== undefined) {
+      tasksCard.textContent = `${data.tasks_completed} tasks completed`;
+    }
+    if (dailiesCard && data.missed_dailies !== undefined) {
+      dailiesCard.textContent = `Missed ${data.missed_dailies} dailies`;
     }
 
     const recapText = document.getElementById('recapText');
-    if (recapText && data.recap) {
-      recapText.textContent = data.recap;
+    if (recapText) {
+      recapText.textContent = data.recap || 'No standout achievements last week.';
     }
   }
 }
@@ -1514,7 +1626,6 @@ async function showStudyModal() {
               });
               if (response.ok) {
                 const data = await response.json();
-                console.log(`Carried over ${data.carried_over_count} colors from last month`);
                 // Store that we carried over colors so startStudySession knows
                 modal.dataset.colorsCarriedOver = 'true';
               } else {
@@ -1910,8 +2021,6 @@ async function startStudySession(params) {
     return;
   }
 
-  console.log('Starting study session:', { subject, mode, duration, color });
-
   try {
     // Check if colors were already carried over in the modal
     let carryOverColors = false;
@@ -1925,7 +2034,6 @@ async function startStudySession(params) {
       delete studyModal.dataset.colorsCarriedOver;
     }
 
-    console.log('Sending study session request...');
     const response = await fetch(`${API_BASE}/api/habits/study/start/`, {
       method: 'POST',
       headers: {
@@ -1939,7 +2047,6 @@ async function startStudySession(params) {
       }),
     });
 
-    console.log('Study session response status:', response.status);
     if (response.ok) {
       const data = await response.json();
 
@@ -2236,7 +2343,6 @@ function showStudySessionCompletionModal(data) {
   coinsEl.textContent = `+${coins}`;
 
   modal.classList.remove('hidden');
-  console.log('Study session completion modal shown', { hours, xp, coins });
 }
 
 // stop active study session (wrapper)
@@ -2571,6 +2677,275 @@ function showLevelUpAnimation() {
   }
 }
 
+// Avatar Customization Functions
+let currentCustomizationCategory = 'avatar';
+
+async function showAvatarCustomizationModal() {
+  const modal = document.getElementById('avatarCustomizationModal');
+  if (modal) {
+    // Load owned items if not already loaded
+    if (!ownedCustomizationItems) {
+      await loadOwnedCustomizationItems();
+    }
+    modal.classList.remove('hidden');
+    switchCustomizationCategory('avatar');
+  }
+}
+
+function switchCustomizationCategory(category) {
+  currentCustomizationCategory = category;
+  
+  // Update active button
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    if (btn.dataset.category === category) {
+      btn.classList.add('bg-gray-200');
+    } else {
+      btn.classList.remove('bg-gray-200');
+    }
+  });
+  
+  loadOwnedCustomizationItems().then(() => {
+    loadCustomizationItems(category);
+  });
+}
+
+// Load owned customization items
+let ownedCustomizationItems = null;
+
+async function loadOwnedCustomizationItems() {
+  try {
+    const response = await fetch(`${API_BASE}/api/customization/owned/`);
+    if (response.ok) {
+      const data = await response.json();
+      ownedCustomizationItems = data.owned_items;
+      // Update userProfile with current background if available
+      if (data.owned_items && data.owned_items.backgrounds && data.owned_items.backgrounds.length > 0) {
+        // Find the currently selected background (non-default)
+        const selectedBg = data.owned_items.backgrounds.find(bg => !bg.is_default && bg.color === userProfile?.avatar_background_color);
+        if (selectedBg && userProfile) {
+          userProfile.avatar_background_color = selectedBg.color;
+          userProfile.avatar_floor_color = selectedBg.floor_color;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading owned customization items:', error);
+    // Fallback to defaults
+    ownedCustomizationItems = {
+      avatars: [{ id: 'default_girl', name: 'Default Girl', type: 'avatar', is_default: true }],
+      shirts: [{ id: 'default', name: 'Default Shirt', type: 'shirt', is_default: true }],
+      pants: [{ id: 'default', name: 'Default Pants', type: 'pants', is_default: true }],
+      socks: [{ id: 'default', name: 'Default Socks', type: 'socks', is_default: true }],
+      shoes: [{ id: 'default', name: 'Default Shoes', type: 'shoes', is_default: true }],
+      backgrounds: [{ id: 'default', name: 'Default', color: '#d8b9b9', floor_color: '#d8aeae', type: 'background', is_default: true }]
+    };
+  }
+}
+
+function loadCustomizationItems(category) {
+  const container = document.getElementById('customizationItemsContainer');
+  if (!container) return;
+  
+  container.innerHTML = '<div class="text-center py-4">Loading...</div>';
+  
+  // Always reload owned items to get latest purchases
+  loadOwnedCustomizationItems().then(() => {
+    if (!ownedCustomizationItems) {
+      const container = document.getElementById('customizationItemsContainer');
+      if (container) {
+        container.innerHTML = '<div class="text-center py-4 text-red-500">Error loading items</div>';
+      }
+      return;
+    }
+    renderCustomizationItems(category);
+  });
+}
+
+function renderCustomizationItems(category) {
+  const container = document.getElementById('customizationItemsContainer');
+  if (!container || !ownedCustomizationItems) return;
+  
+  container.innerHTML = '';
+  
+  if (category === 'avatar') {
+    // Show owned avatars
+    const avatars = ownedCustomizationItems.avatars || [];
+    avatars.forEach(avatar => {
+      const card = document.createElement('div');
+      const isSelected = userProfile?.avatar_character === avatar.id || (!userProfile?.avatar_character && avatar.is_default);
+      card.className = `rounded-lg border-2 bg-white p-4 cursor-pointer hover:border-blue-400 ${isSelected ? 'border-blue-400' : 'border-gray-300'}`;
+      card.innerHTML = `
+        <div class="mb-3 flex items-center justify-center" style="height: 120px; background-color: ${userProfile?.avatar_background_color || '#d8b9b9'};">
+          <div class="relative" style="height: 100px; width: 100px;">
+            <img src="/static/avatars/${avatar.id}/idle/idle1_body.svg" class="absolute inset-0 h-full w-full object-contain" style="z-index: 1;" />
+            <img src="/static/avatars/clothes/${userProfile?.avatar_socks || 'default'}/idle1/socks.svg" class="absolute inset-0 h-full w-full object-contain" style="z-index: 2;" />
+            <img src="/static/avatars/clothes/${userProfile?.avatar_pants || 'default'}/idle1/pants.svg" class="absolute inset-0 h-full w-full object-contain" style="z-index: 3;" />
+            <img src="/static/avatars/clothes/${userProfile?.avatar_shoes || 'default'}/idle1/shoes.svg" class="absolute inset-0 h-full w-full object-contain" style="z-index: 4;" />
+            <img src="/static/avatars/clothes/${userProfile?.avatar_shirt || 'default'}/idle1/shirt.svg" class="absolute inset-0 h-full w-full object-contain" style="z-index: 5;" />
+            <img src="/static/avatars/${avatar.id}/idle/idle1_hair.svg" class="absolute inset-0 h-full w-full object-contain" style="z-index: 6;" />
+          </div>
+        </div>
+        <h4 class="text-sm font-semibold text-center">${avatar.name}</h4>
+      `;
+      card.onclick = () => selectAvatarItem(avatar.id);
+      container.appendChild(card);
+    });
+  } else if (category === 'background') {
+    // Show owned backgrounds
+    const backgrounds = ownedCustomizationItems.backgrounds || [];
+    if (backgrounds.length === 0) {
+      container.innerHTML = '<div class="text-center py-4 text-gray-500">No backgrounds available</div>';
+      return;
+    }
+    backgrounds.forEach(bg => {
+      const currentBg = userProfile?.avatar_background_color || null;
+      const isSelected = (currentBg && currentBg.toLowerCase().trim() === bg.color.toLowerCase().trim()) || (!currentBg && bg.is_default);
+      const card = document.createElement('div');
+      card.className = `rounded-lg border-2 bg-white p-4 cursor-pointer hover:border-blue-400 ${isSelected ? 'border-blue-400' : 'border-gray-300'}`;
+      card.innerHTML = `
+        <div class="mb-3 h-20 rounded border border-gray-300" style="background-color: ${bg.color};">
+          <div class="h-8 w-8 rounded-full border-2 border-black mx-auto mt-4" style="background-color: ${bg.floor_color};"></div>
+        </div>
+        <h4 class="text-sm font-semibold text-center">${bg.name}</h4>
+      `;
+      card.onclick = () => selectBackground(bg.color, bg.floor_color);
+      container.appendChild(card);
+    });
+  } else {
+    // For clothes items - show owned items
+    // Map category to the correct plural key (pants, socks, shoes are already plural)
+    const categoryMap = {
+      'shirt': 'shirts',
+      'pants': 'pants',
+      'socks': 'socks',
+      'shoes': 'shoes'
+    };
+    const categoryKey = categoryMap[category] || `${category}s`;
+    const items = ownedCustomizationItems[categoryKey] || [];
+    items.forEach(item => {
+      const isSelected = userProfile?.[`avatar_${category}`] === item.id || (!userProfile?.[`avatar_${category}`] && item.is_default);
+      const card = document.createElement('div');
+      card.className = `rounded-lg border-2 bg-white p-4 cursor-pointer hover:border-blue-400 ${isSelected ? 'border-blue-400' : 'border-gray-300'}`;
+      card.innerHTML = `
+        <div class="mb-3 flex items-center justify-center" style="height: 120px;">
+          <img src="/static/avatars/clothes/${item.id}/idle1/${category}.svg" class="h-20 w-20 object-contain" />
+        </div>
+        <h4 class="text-sm font-semibold text-center">${item.name}</h4>
+      `;
+      card.onclick = () => selectClothingItem(category, item.id);
+      container.appendChild(card);
+    });
+  }
+}
+
+async function selectAvatarItem(avatarId) {
+  if (!userProfile) return;
+  
+  // Update user profile
+  userProfile.avatar_character = avatarId;
+  
+  // Save to backend
+  try {
+    const response = await fetch(`${API_BASE}/api/profile/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({
+        avatar_character: avatarId
+      }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      userProfile.avatar_character = data.avatar_character || avatarId;
+      // Reload avatar to show new character
+      updateAvatar(userProfile.avatar_state || 'idle');
+      // Refresh the modal to show updated selection
+      loadCustomizationItems(currentCustomizationCategory);
+    }
+  } catch (err) {
+    console.error('Error saving avatar:', err);
+  }
+}
+
+async function selectClothingItem(type, itemId) {
+  if (!userProfile) return;
+  
+  // Update user profile based on clothing type
+  const fieldMap = {
+    'shirt': 'avatar_shirt',
+    'pants': 'avatar_pants',
+    'socks': 'avatar_socks',
+    'shoes': 'avatar_shoes'
+  };
+  
+  const fieldName = fieldMap[type];
+  if (!fieldName) return;
+  
+  userProfile[fieldName] = itemId;
+  
+  // Save to backend
+  try {
+    const updateData = { [fieldName]: itemId };
+    
+    const response = await fetch(`${API_BASE}/api/profile/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify(updateData),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      // Update local profile
+      if (data[fieldName]) userProfile[fieldName] = data[fieldName];
+      // Reload avatar to show new clothes
+      updateAvatar(userProfile.avatar_state || 'idle');
+      // Refresh the modal to show updated selection
+      loadCustomizationItems(currentCustomizationCategory);
+    }
+  } catch (err) {
+    console.error('Error saving clothing:', err);
+  }
+}
+
+async function selectBackground(bgColor, floorColor) {
+  // Update background colors
+  if (userProfile) {
+    userProfile.avatar_background_color = bgColor;
+    userProfile.avatar_floor_color = floorColor;
+    updateUserProfile();
+    
+    // Save to backend
+    try {
+      const response = await fetch(`${API_BASE}/api/profile/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          avatar_background_color: bgColor,
+          avatar_floor_color: floorColor
+        }),
+      });
+      
+      if (response.ok) {
+        // Refresh the modal to show updated selection
+        loadCustomizationItems(currentCustomizationCategory);
+      }
+    } catch (err) {
+      console.error('Error saving background:', err);
+    }
+  }
+}
+
 // Make functions available globally
+window.showAvatarCustomizationModal = showAvatarCustomizationModal;
+window.switchCustomizationCategory = switchCustomizationCategory;
 window.togglePendingItem = togglePendingItem;
 window.confirmPendingItems = confirmPendingItems;

@@ -24,10 +24,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentView = 'monthly';
   document.querySelectorAll('.view-toggle').forEach(btn => {
     if (btn.dataset.view === 'monthly') {
-      btn.classList.add('bg-blue-500', 'text-white');
+      btn.classList.add('bg-blue-400', 'text-white');
       btn.classList.remove('bg-white', 'text-gray-700');
     } else {
-      btn.classList.remove('bg-blue-500', 'text-white');
+      btn.classList.remove('bg-blue-400', 'text-white');
       btn.classList.add('bg-white', 'text-gray-700');
     }
   });
@@ -69,7 +69,6 @@ function setupEventListeners() {
   
   if (monthlyBtn) {
     monthlyBtn.addEventListener('click', () => {
-      console.log('Monthly button clicked');
       switchView('monthly');
     });
   } else {
@@ -78,7 +77,6 @@ function setupEventListeners() {
   
   if (weeklyBtn) {
     weeklyBtn.addEventListener('click', () => {
-      console.log('Weekly button clicked');
       switchView('weekly');
     });
   } else {
@@ -89,7 +87,6 @@ function setupEventListeners() {
   if (tagButton) {
     tagButton.addEventListener('click', (e) => {
       e.preventDefault();
-      console.log('Tag button clicked');
       showColorOrganizationModal();
     });
   } else {
@@ -125,19 +122,16 @@ function setupEventListeners() {
 
 // Switch between monthly and weekly view
 function switchView(view) {
-  console.log('Switching view to:', view);
   currentView = view;
 
   // Update button styles
   const buttons = document.querySelectorAll('.view-toggle');
-  console.log('Found buttons:', buttons.length);
   buttons.forEach(btn => {
     if (btn.dataset.view === view) {
-      btn.classList.add('bg-blue-500', 'text-white');
+      btn.classList.add('bg-blue-400', 'text-white');
       btn.classList.remove('bg-white', 'text-gray-700');
-      console.log('Activated button:', btn.dataset.view);
     } else {
-      btn.classList.remove('bg-blue-500', 'text-white');
+      btn.classList.remove('bg-blue-400', 'text-white');
       btn.classList.add('bg-white', 'text-gray-700');
     }
   });
@@ -181,7 +175,6 @@ function switchView(view) {
 // Load stats data
 async function loadStats(viewType) {
   try {
-    console.log('Loading stats for view type:', viewType);
     const url = viewType === 'weekly' 
       ? `${API_BASE}/api/study/stats/?type=${viewType}&week_offset=${currentWeekOffset}`
       : `${API_BASE}/api/study/stats/?type=${viewType}&month_offset=${currentMonthOffset}`;
@@ -194,9 +187,6 @@ async function loadStats(viewType) {
     }
     statsData = await response.json();
     colorLegend = statsData.color_legend || {};
-    console.log('Loaded color legend:', colorLegend);
-    console.log('Stats data:', statsData);
-    console.log('By day data:', statsData.by_day);
 
     updateTotalHours(statsData.total_hours || 0);
     updateColorLegend();
@@ -215,7 +205,6 @@ async function loadStats(viewType) {
         // Current week has no data - try to find most recent week with data
         // We'll need to fetch monthly data to find dates with data
         // For now, just use current week and let user navigate with date picker
-        console.log('No data in current week. Use date picker to navigate to weeks with data.');
         allWeekDays = [];
       } else {
         // Has data - use the dates from the response
@@ -402,8 +391,7 @@ function updateColorLegend() {
   legendEl.innerHTML = '';
   
   const subjects = Object.keys(colorLegend).sort();
-  console.log('Updating color legend with subjects:', subjects);
-
+  
   if(subjects.length === 0) {
     legendEl.innerHTML = '<p class="text-sm text-gray-500">No subjects yet. Start a study session to assign colors to subjects.</p>';
     return;
@@ -1168,7 +1156,6 @@ let subjectRenames = {};
 
 // Show color organization modal
 async function showColorOrganizationModal() {
-  console.log('showColorOrganizationModal called');
   const modal = document.getElementById('colorModal');
   if (!modal) {
     console.error('Color modal not found');
@@ -1242,7 +1229,6 @@ async function showColorOrganizationModal() {
       });
       
       const subjects = Object.keys(modalColorLegend).sort();
-      console.log('Subjects in modal color legend:', subjects);
       
       subjects.forEach(subject => {
         const item = document.createElement('div');
@@ -1525,7 +1511,6 @@ function showColorShadesForSubject(subject, colorIndex, baseColor, shadePickerEl
       const newColor = shade;
       colorLegend[subject] = newColor;
       updateColorPickerSelection(subject, newColor);
-      console.log(`Changed ${subject} color to ${newColor}`);
     });
     shadePickerEl.appendChild(btn);
   });
@@ -1572,7 +1557,6 @@ async function saveColorOrganization() {
 
     if (response.ok) {
       const result = await response.json();
-      console.log('Colors saved successfully:', result);
       closeModal('colorModal');
       await loadStats(currentView);
     } else {

@@ -27,7 +27,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-vom78rjprgv@2+38p#7g&fegi1qgg7d@9axfvixj&1jhaf1&4q')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+# For production, set DEBUG=False in environment variables
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -73,6 +74,9 @@ TEMPLATES = [
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+# STATIC_ROOT is used by collectstatic for production deployments
+# Set STATIC_ROOT in production: STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = os.getenv('STATIC_ROOT', None)
 
 WSGI_APPLICATION = 'habit_rpg.wsgi.application'
 

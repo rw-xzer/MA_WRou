@@ -17,6 +17,17 @@ class UserProfile(models.Model):
   coins = models.IntegerField(default=0)
   avatar = models.CharField(max_length=100, default='default_avatar.png')
   avatar_state = models.CharField(max_length=20, default='idle')
+  
+  # Avatar customization fields
+  avatar_character = models.CharField(max_length=50, default='default_girl', blank=True, null=True)
+  avatar_clothes = models.CharField(max_length=50, default='default', blank=True, null=True)
+  avatar_shirt = models.CharField(max_length=50, default='default', blank=True, null=True)
+  avatar_pants = models.CharField(max_length=50, default='default', blank=True, null=True)
+  avatar_socks = models.CharField(max_length=50, default='default', blank=True, null=True)
+  avatar_shoes = models.CharField(max_length=50, default='default', blank=True, null=True)
+  avatar_background_color = models.CharField(max_length=20, default='#d8b9b9', blank=True, null=True)
+  avatar_floor_color = models.CharField(max_length=20, default='#d8aeae', blank=True, null=True)
+  purchased_backgrounds = models.TextField(blank=True, null=True)
 
   # All time stats
   all_time_hours_studied = models.FloatField(default=0.0)
@@ -29,7 +40,7 @@ class UserProfile(models.Model):
 
   def calculate_xp_for_lvl(self):
     """Calculate xp needed for next level"""
-    return int(((self.level - 1) + self.level) * 30)
+    return int(((self.level - 1) + self.level) * 20)
   
   def add_xp(self, amount):
     """Add xp and check for lvl up"""
@@ -410,12 +421,14 @@ class ShopItem(models.Model):
     ('customization', 'Customization'),
   ]
 
+  user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True) 
   name = models.CharField(max_length=100)
   description = models.TextField()
   item_type = models.CharField(max_length=20, choices=ITEM_TYPE_CHOICES)
   price = models.IntegerField()
   image_url = models.CharField(max_length=200, blank=True)
   active = models.BooleanField(default=True)
+  created_at = models.DateTimeField(auto_now_add=True)
 
 class UserPurchase(models.Model):
   """User purchases from shop"""

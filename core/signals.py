@@ -15,8 +15,8 @@ def create_user_profile(sender, instance, created, **kwargs):
     profile = UserProfile.objects.create(user=instance)
     habit = Habit.objects.create(
       user=instance,
-      title="Study/Procastinate",
-      details="Track whether you studied or proocastinated today",
+      title="Study/Procrastinate",
+      details="Track whether you studied or procrastinated today",
       diff='medium',
       allow_neg=True,
       allow_pos=True,
@@ -33,9 +33,9 @@ def create_user_profile(sender, instance, created, **kwargs):
 
     reward = ShopItem.objects.create(
       user=instance,
-      name="play a game",
-      description="A fun reward for completing tasks",
-      item_type='reward',
+      name="Play a game",
+      description="You deserve a break. Play a game to relax and clear your mind.",
+      item_type='character',
       price=10,
       active=True
     )

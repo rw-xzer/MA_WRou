@@ -46,13 +46,19 @@ function updateCoinsDisplay() {
   }
 }
 
+// Global state for shop items
+let userItems = [];
+let customizationItems = [];
+
 // Load rewards
 async function loadRewards() {
   try {
-    const response = await fetch(`${API_BASE}/api/shop/items/`);
+    const response = await fetch(`${API_BASE}/api/shop/items/?_=${Date.now()}`);
     if (response.ok) {
       const data = await response.json();
-      rewards = data.items || [];
+      userItems = data.user_items || [];
+      customizationItems = data.customization_items || [];
+      rewards = [...userItems, ...customizationItems];
       renderRewards();
     }
   } catch (error) {
@@ -65,24 +71,81 @@ function renderRewards() {
   const container = document.getElementById('rewardsContainer');
   if (!container) return;
 
-  if (rewards.length === 0) {
-    container.innerHTML = '<p class="text-gray-500">No rewards yet. Click "Add Reward" to create one!</p>';
-    return;
+  let html = '';
+  
+  // User-defined items section
+  if (userItems.length > 0) {
+    html += '<div class="mb-12"><h2 class="text-xl font-bold mb-4">Your Rewards</h2>';
+    html += '<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">';
+    html += userItems.map(reward => createRewardCard(reward)).join('');
+    html += '</div></div>';
+  }
+  
+  // Customization items section
+  if (customizationItems.length > 0) {
+    html += '<div class="border-t border-gray-300 pt-8 mb-8">';
+    html += '<h2 class="text-xl font-bold mb-4">Customization</h2>';
+    html += '<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">';
+    html += customizationItems.map(item => createCustomizationCard(item)).join('');
+    html += '</div></div>';
+  }
+  
+  if (html === '') {
+    html = '<p class="text-gray-500">No items available. Click "Add Reward" to create one!</p>';
   }
 
-  container.innerHTML = rewards.map(reward => createRewardCard(reward)).join('');
+  container.innerHTML = html;
   
   // Add event listeners to purchase buttons
-  rewards.forEach(reward => {
-    const purchaseBtn = document.getElementById(`purchaseBtn-${reward.id}`);
+  [...userItems, ...customizationItems].forEach(item => {
+    const purchaseBtn = document.getElementById(`purchaseBtn-${item.id}`);
     if (purchaseBtn) {
-      purchaseBtn.addEventListener('click', () => purchaseReward(reward.id));
+      purchaseBtn.addEventListener('click', () => purchaseReward(item.id, item));
     }
-    const editBtn = document.getElementById(`editBtn-${reward.id}`);
+    const editBtn = document.getElementById(`editBtn-${item.id}`);
     if (editBtn) {
-      editBtn.addEventListener('click', () => editReward(reward.id));
+      editBtn.addEventListener('click', () => editReward(item.id));
     }
   });
+}
+
+// Create customization card HTML (for background colors, etc.)
+function createCustomizationCard(item) {
+  const canAfford = userProfile && userProfile.coins >= item.price;
+  const isBackground = item.background_color && item.floor_color;
+  
+  let previewHtml = '';
+  if (isBackground) {
+    previewHtml = `
+      <div class="mb-2 h-16 rounded border border-gray-300 flex items-center justify-center" style="background-color: ${item.background_color};">
+        <div class="h-8 w-8 rounded-full border-2 border-black" style="background-color: ${item.floor_color};"></div>
+      </div>
+    `;
+  }
+  
+  return `
+    <div class="rounded-lg border border-gray-300 bg-white p-4">
+      ${previewHtml}
+      <div class="mb-3">
+        <h3 class="text-lg font-semibold">${escapeHtml(item.name)}</h3>
+        ${item.description ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(item.description)}</p>` : ''}
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-lg font-bold text-blue-600">${item.price} coins</span>
+        <button
+          id="purchaseBtn-${item.id}"
+          class="rounded-lg border border-black px-3 py-1 text-sm font-medium ${
+            canAfford 
+              ? 'bg-blue-400 text-white hover:bg-blue-500' 
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }"
+          ${!canAfford ? 'disabled' : ''}
+        >
+          Purchase
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 // Create reward card HTML
@@ -107,7 +170,7 @@ function createRewardCard(reward) {
             id="purchaseBtn-${reward.id}"
             class="rounded-lg border border-black px-3 py-1 text-sm font-medium ${
               canAfford 
-                ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                ? 'bg-blue-400 text-white hover:bg-blue-500' 
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }"
             ${!canAfford ? 'disabled' : ''}
@@ -212,12 +275,20 @@ async function createRewardFromForm() {
       closeModal('rewardModal');
       loadRewards();
     } else {
-      const error = await response.json();
-      alert(error.error || 'Failed to save reward');
+      let errorMessage = 'Failed to save reward';
+      try {
+        const error = await response.json();
+        console.error('Reward save error:', error);
+        errorMessage = error.error || error.message || errorMessage;
+      } catch (e) {
+        console.error('Error parsing error response:', e);
+        errorMessage = `Failed to save reward (status: ${response.status})`;
+      }
+      alert(errorMessage);
     }
   } catch (error) {
     console.error('Error saving reward:', error);
-    alert('Failed to save reward');
+    alert(`Failed to save reward: ${error.message || error}`);
   }
 }
 
@@ -256,13 +327,13 @@ async function deleteReward() {
 }
 
 // Purchase reward
-async function purchaseReward(rewardId) {
+async function purchaseReward(rewardId, item = null) {
   if (!userProfile) {
     alert('User profile not loaded');
     return;
   }
 
-  const reward = rewards.find(r => r.id === rewardId);
+  const reward = item || rewards.find(r => r.id === rewardId);
   if (!reward) return;
 
   if (userProfile.coins < reward.price) {
@@ -275,6 +346,46 @@ async function purchaseReward(rewardId) {
   }
 
   try {
+    // Handle background color purchases
+    if (reward.background_color && reward.floor_color) {
+      const response = await fetch(`${API_BASE}/api/shop/purchase/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+          item_id: reward.id
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        userProfile.coins = data.coins_left;
+        updateCoinsDisplay();
+        alert(`Purchased "${reward.name}"! You can equip it from the customization menu.`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // Reload rewards to remove purchased item from shop
+        await loadRewards();
+        if (typeof loadOwnedCustomizationItems === 'function') {
+          await loadOwnedCustomizationItems();
+        }
+      } else {
+        let errorMessage = 'Failed to purchase item';
+        try {
+          const error = await response.json();
+          console.error('Purchase failed:', error);
+          errorMessage = error.error || error.message || errorMessage;
+        } catch (e) {
+          console.error('Error parsing error response:', e);
+          errorMessage = `Purchase failed with status ${response.status}`;
+        }
+        alert(errorMessage);
+      }
+      return;
+    }
+    
+    // Regular item purchase
     const response = await fetch(`${API_BASE}/api/shop/purchase/`, {
       method: 'POST',
       headers: {

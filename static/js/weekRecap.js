@@ -2,9 +2,30 @@
 
 // load recap
 async function loadRecap() {
-  // Get username from the page 
-  const usernameElement = document.querySelector('nav span');
-  const username = usernameElement ? usernameElement.textContent.replace('Hello, ', '').trim() : 'unknown';
+
+  if (!userProfile || !userProfile.user_id) {
+    // Wait a bit for userProfile to load, then retry
+    setTimeout(loadRecap, 100);
+    return;
+  }
+  
+  const userId = userProfile.user_id;
+  const currentUserIdKey = 'current_recap_user_id';
+  const storedUserId = localStorage.getItem(currentUserIdKey);
+  
+  // If user changed, clear all old recap cache
+  if (storedUserId && storedUserId !== String(userId)) {
+    // Clear all recap-related cache entries
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('recap_') || key.startsWith('recap_date_'))) {
+        localStorage.removeItem(key);
+      }
+    }
+  }
+  
+  // Store current user ID
+  localStorage.setItem(currentUserIdKey, String(userId));
   
   const today = new Date();
   const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday etc
@@ -16,9 +37,9 @@ async function loadRecap() {
   const lastMondayKey = lastMonday.toISOString().split('T')[0];
   
   // Check for cached recap
-  const cacheKey = `recap_${username}_${lastMondayKey}`;
+  const cacheKey = `recap_${userId}_${lastMondayKey}`;
   const cachedRecap = localStorage.getItem(cacheKey);
-  const cachedDate = localStorage.getItem(`recap_date_${username}_${lastMondayKey}`);
+  const cachedDate = localStorage.getItem(`recap_date_${userId}_${lastMondayKey}`);
   
   // use cached data
   if (cachedRecap && cachedDate === lastMondayKey && dayOfWeek !== 1) {
@@ -40,21 +61,21 @@ async function loadRecap() {
     const data = await response.json();
     updateRecap(data);
     
-    // Cache the recap for this week (with username)
+    // Cache the recap for this week
     localStorage.setItem(cacheKey, JSON.stringify(data));
-    localStorage.setItem(`recap_date_${username}_${lastMondayKey}`, lastMondayKey);
+    localStorage.setItem(`recap_date_${userId}_${lastMondayKey}`, lastMondayKey);
     
     // Clean up old recap caches for this user
     const twoWeeksAgo = new Date(lastMonday);
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(`recap_${username}_`) && !key.startsWith(`recap_date_${username}_`)) {
-        const dateStr = key.replace(`recap_${username}_`, '');
+      if (key && key.startsWith(`recap_${userId}_`) && !key.startsWith(`recap_date_${userId}_`)) {
+        const dateStr = key.replace(`recap_${userId}_`, '');
         const cacheDate = new Date(dateStr);
         if (cacheDate < twoWeeksAgo) {
           localStorage.removeItem(key);
-          localStorage.removeItem(`recap_date_${username}_${dateStr}`);
+          localStorage.removeItem(`recap_date_${userId}_${dateStr}`);
         }
       }
     }

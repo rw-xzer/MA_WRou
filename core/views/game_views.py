@@ -51,6 +51,8 @@ def api_user_profile(request):
     profile.save()
   
   return JsonResponse({
+    'user_id': request.user.id,
+    'username': request.user.username,
     'level': profile.level,
     'xp': profile.xp,
     'max_xp': profile.max_xp,

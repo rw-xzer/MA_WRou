@@ -177,10 +177,18 @@ TIME_ZONE=UTC
 
 **Important**: Generate a secure `SECRET_KEY` for production using:
 
-```python
-from django.core.management.utils import get_random_secret_key
-print(get_random_secret_key())
+```bash
+# Windows (with virtual environment activated)
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# Or if using the virtual environment directly:
+venv\Scripts\python.exe -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# macOS/Linux (with virtual environment activated)
+python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
+
+**Note**: Make sure your virtual environment is activated or use the full path to the Python executable in your virtual environment. Copy the generated key and paste it as the value for `SECRET_KEY` in your `.env` file.
 
 ### 5. Run Database Migrations
 

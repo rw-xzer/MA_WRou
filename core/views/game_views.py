@@ -896,8 +896,8 @@ def api_reset_dailies(request):
       if profile.avatar_state != 'celebrating':
         profile.avatar_state = 'hurt'
 
-      if daily.streak > 0:
-        daily.streak = 0
+      # Reset streak if daily was not completed
+      daily.streak = 0
 
   yesterday_start = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
   yesterday_end = timezone.make_aware(datetime.combine(yesterday, datetime.max.time()))
@@ -928,6 +928,7 @@ def api_reset_dailies(request):
     daily.completed = False
     daily.completed_at = None
 
+    # Reset streak for dailies that were never completed
     if not daily.last_completed:
       daily.streak = 0
 

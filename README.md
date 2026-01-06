@@ -399,4 +399,4 @@ This project is part of a Maturitätsarbeit (matura thesis) and is for education
 
 ## Author
 
-Maturitätsarbeit Rou Wong 2026 Kantonsschule Uster FS Informatik
+Maturitätsarbeit 2026 Kantonsschule Uster FS Informatik

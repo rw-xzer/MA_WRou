@@ -1,0 +1,90 @@
+<!doctype html>
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="flex h-[91.7dvh] items-center justify-center bg-gray-100">
+  <div class="w-full max-w-md rounded-lg border border-black bg-white p-8 shadow-lg">
+    <h1 class="mb-6 text-center text-3xl font-bold">Habit RPG</h1>
+    <h2 class="mb-4 text-center text-xl">Register</h2>
+    
+    {% if form.errors %}
+    <div class="mb-4 rounded-lg border border-red-500 bg-red-50 p-3 text-red-700">
+      <ul class="list-disc list-inside">
+        {% for field in form %}
+          {% for error in field.errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        {% endfor %}
+        {% for error in form.non_field_errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    
+    <form method="post" action="{% url 'register' %}">
+      {% csrf_token %}
+      <div class="mb-4">
+        <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium mb-1">Username</label>
+        <input 
+          type="text" 
+          name="{{ form.username.name }}" 
+          id="{{ form.username.id_for_label }}"
+          class="w-full rounded border border-black px-3 py-2" 
+          required 
+          autofocus
+          maxlength="150"
+          autocomplete="username"
+        />
+        {% if form.username.help_text %}
+        <p class="mt-1 text-xs text-gray-500">{{ form.username.help_text }}</p>
+        {% endif %}
+      </div>
+      
+      <div class="mb-4">
+        <label for="{{ form.password1.id_for_label }}" class="block text-sm font-medium mb-1">Password</label>
+        <input 
+          type="password" 
+          name="{{ form.password1.name }}" 
+          id="{{ form.password1.id_for_label }}"
+          class="w-full rounded border border-black px-3 py-2" 
+          required 
+          autocomplete="new-password"
+        />
+        {% if form.password1.help_text %}
+        <p class="mt-1 text-xs text-gray-500">{{ form.password1.help_text }}</p>
+        {% endif %}
+      </div>
+      
+      <div class="mb-6">
+        <label for="{{ form.password2.id_for_label }}" class="block text-sm font-medium mb-1">Password Confirmation</label>
+        <input 
+          type="password" 
+          name="{{ form.password2.name }}" 
+          id="{{ form.password2.id_for_label }}"
+          class="w-full rounded border border-black px-3 py-2" 
+          required 
+          autocomplete="new-password"
+        />
+        {% if form.password2.help_text %}
+        <p class="mt-1 text-xs text-gray-500">{{ form.password2.help_text }}</p>
+        {% endif %}
+      </div>
+      
+      <button type="submit" class="w-full rounded-lg border border-black bg-blue-400 px-4 py-2 text-white hover:bg-blue-500 mb-4">
+        Register
+      </button>
+      
+      <div class="text-center">
+        <p class="text-sm text-gray-600">
+          Already have an account? 
+          <a href="{% url 'login' %}" class="text-blue-600 hover:text-blue-800 underline">Login here</a>
+        </p>
+      </div>
+    </form>
+    
+  </div>
+</div>
+{% endblock %}
+

@@ -2,6 +2,7 @@
 from .auth_views import (
     login_view,
     logout_view,
+    register_view,
     index,
     stats_page,
     shop_page,
@@ -45,6 +46,7 @@ __all__ = [
     # Auth views
     'login_view',
     'logout_view',
+    'register_view',
     'index',
     'stats_page',
     'shop_page',

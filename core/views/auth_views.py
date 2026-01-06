@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
 def login_view(request):
   """Login view"""
@@ -26,6 +26,23 @@ def logout_view(request):
   """Logout view"""
   logout(request)
   return redirect('login')
+
+def register_view(request):
+  """Registration view"""
+  if request.user.is_authenticated:
+    return redirect('index')
+  
+  if request.method == 'POST':
+    form = UserCreationForm(request.POST)
+    if form.is_valid():
+      user = form.save()
+      # Automatically log in the user after registration
+      login(request, user)
+      return redirect('index')
+  else:
+    form = UserCreationForm()
+  
+  return render(request, 'register.html', {'form': form})
 
 @login_required
 def index(request):

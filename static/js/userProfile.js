@@ -23,19 +23,23 @@ function updateUserProfile(isInitialLoad = false) {
   const xpText = document.getElementById('xpText');
   const lvlText = document.getElementById('lvlText');
   const coinsText = document.getElementById('coinsText');
+  const safeHp = Math.max(0, Number(userProfile.hp) || 0);
+  const safeMaxHp = Math.max(1, Number(userProfile.max_hp) || 1);
+  const safeXp = Math.max(0, Number(userProfile.xp) || 0);
+  const safeMaxXp = Math.max(1, Number(userProfile.max_xp) || 1);
 
   if (healthBar) {
-    const healthPercent = (userProfile.hp / userProfile.max_hp) * 100;
+    const healthPercent = Math.min(100, Math.max(0, (safeHp / safeMaxHp) * 100));
     healthBar.style.width = `${healthPercent}%`;
   }
 
   if (xpBar) {
-    const xpPercent = (userProfile.xp / userProfile.max_xp) * 100;
+    const xpPercent = Math.min(100, Math.max(0, (safeXp / safeMaxXp) * 100));
     xpBar.style.width = `${xpPercent}%`;
   }
 
-  if (healthText) healthText.textContent = `${userProfile.hp}/${userProfile.max_hp}`;
-  if (xpText) xpText.textContent = `${userProfile.xp}/${userProfile.max_xp}`;
+  if (healthText) healthText.textContent = `${safeHp}/${safeMaxHp}`;
+  if (xpText) xpText.textContent = `${safeXp}/${safeMaxXp}`;
   if (lvlText) lvlText.textContent = `Lv. ${userProfile.level}`;
   
   // Ensure coins text is always set and visible

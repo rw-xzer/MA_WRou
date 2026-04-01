@@ -20,19 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   setupEventListeners();
-  // Set initial active button style
-  currentView = 'monthly';
-  document.querySelectorAll('.view-toggle').forEach(btn => {
-    if (btn.dataset.view === 'monthly') {
-      btn.classList.add('bg-blue-400', 'text-white');
-      btn.classList.remove('bg-white', 'text-gray-700');
-    } else {
-      btn.classList.remove('bg-blue-400', 'text-white');
-      btn.classList.add('bg-white', 'text-gray-700');
-    }
-  });
-  loadStats('monthly');
-  updateMonthLabel();
+  // Use the same view-switch path as button clicks so
+  // monthly navigation is visible on the first render too.
+  switchView('monthly');
 });
 
 // Check for active study session and redirect if found
@@ -699,7 +689,7 @@ function renderWeeklyDailyChart(ctx) {
             width: 0.6,
             height: hoursUntilMidnight,
             subject: session.subject,
-            color: session.color || colorLegend[session.subject] || '#3b82f6',
+              color: colorLegend[session.subject] || session.color || '#3b82f6',
             startTime: session.start_time,
             durationMinutes: session.duration_minutes || 0,
             isSplit: true,
@@ -714,7 +704,7 @@ function renderWeeklyDailyChart(ctx) {
               width: 0.6,
               height: hoursAfterMidnight,
               subject: session.subject,
-              color: session.color || colorLegend[session.subject] || '#3b82f6',
+              color: colorLegend[session.subject] || session.color || '#3b82f6',
               startTime: session.start_time,
               durationMinutes: session.duration_minutes || 0,
               isSplit: true,
@@ -728,7 +718,7 @@ function renderWeeklyDailyChart(ctx) {
             width: 0.6,
             height: durationHours,
             subject: session.subject,
-            color: session.color || colorLegend[session.subject] || '#3b82f6',
+            color: colorLegend[session.subject] || session.color || '#3b82f6',
             startTime: session.start_time,
             durationMinutes: session.duration_minutes || 0,
           });
@@ -1137,8 +1127,9 @@ function showDayDetails(dayStr, totalHours) {
 
       const item = document.createElement('div');
       item.className = 'flex items-center gap-3 rounded-lg border border-gray-200 p-3';
+      const detailColor = colorLegend[session.subject] || session.color || '#3b82f6';
       item.innerHTML = `
-        <div class="h-4 w-4 rounded border border-gray-300" style="background-color: ${session.color}"></div>
+        <div class="h-4 w-4 rounded border border-gray-300" style="background-color: ${detailColor}"></div>
         <div class="flex-1">
           <p class="font-medium">${session.subject}</p>
           <p class="text-sm text-gray-600">${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${hours}h ${minutes}m</p>

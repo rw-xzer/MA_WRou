@@ -251,13 +251,32 @@ def api_stat_value(request):
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
   if stat_type == 'hours_studied':
-    return JsonResponse({'value': round(profile.all_time_hours_studied, 1)})
+    total_minutes = StudySession.objects.filter(
+      user=request.user,
+      active=False
+    ).aggregate(total=Sum('duration_minutes'))['total'] or 0
+    total_hours = round(total_minutes / 60.0, 1)
+    if round(profile.all_time_hours_studied, 1) != total_hours:
+      profile.all_time_hours_studied = total_minutes / 60.0
+      profile.save(update_fields=['all_time_hours_studied'])
+    return JsonResponse({'value': total_hours})
   
   elif stat_type == 'tasks_completed':
-    return JsonResponse({'value': profile.all_time_tasks_completed})
+    tasks_completed = TaskLog.objects.filter(task__user=request.user).count()
+    if profile.all_time_tasks_completed != tasks_completed:
+      profile.all_time_tasks_completed = tasks_completed
+      profile.save(update_fields=['all_time_tasks_completed'])
+    return JsonResponse({'value': tasks_completed})
   
   elif stat_type == 'habits_completed':
-    return JsonResponse({'value': profile.all_time_habits_completed})
+    habits_completed = HabitLog.objects.filter(
+      habit__user=request.user,
+      positive=True
+    ).count()
+    if profile.all_time_habits_completed != habits_completed:
+      profile.all_time_habits_completed = habits_completed
+      profile.save(update_fields=['all_time_habits_completed'])
+    return JsonResponse({'value': habits_completed})
   
   elif stat_type == 'current_streak':
     max_streak = Task.objects.filter(user=request.user, task_type='daily').aggregate(
@@ -276,7 +295,12 @@ def api_stat_value(request):
     return JsonResponse({'value': max(profile.longest_daily_streak, max_streak)})
   
   elif stat_type == 'coins_earned':
-    return JsonResponse({'value': profile.all_time_coins_earned})
+    # Keep all-time earned at least current balance to handle manual/admin adjustments.
+    corrected_earned = max(profile.all_time_coins_earned, profile.coins)
+    if corrected_earned != profile.all_time_coins_earned:
+      profile.all_time_coins_earned = corrected_earned
+      profile.save(update_fields=['all_time_coins_earned'])
+    return JsonResponse({'value': corrected_earned})
   
   elif stat_type == 'level':
     return JsonResponse({'value': profile.highest_level_ever})
@@ -836,7 +860,8 @@ def api_study_stats(request):
         'subject': subject,
         'start_time': session.start_time.isoformat(),
         'duration_minutes': session.duration_minutes or 0,
-        'color': session.color or color_legend.get(subject, '#FFFFFF'),
+        # Always prefer current legend mapping so bars match legend after recoloring.
+        'color': color_legend.get(subject) or session.color or '#3b82f6',
       })
 
       if subject not in stats_by_subject:

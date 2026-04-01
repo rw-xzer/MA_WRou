@@ -25,6 +25,31 @@ from ..models import (
 def api_user_profile(request):
   """Get user profile data"""
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  # Keep progress consistent and carry XP overflow into next levels.
+  changed_fields = set()
+  if profile.level < 1:
+    profile.level = 1
+    changed_fields.add('level')
+  if profile.xp < 0:
+    profile.xp = 0
+    changed_fields.add('xp')
+
+  expected_max_xp = profile.calculate_xp_for_lvl()
+  if profile.max_xp != expected_max_xp:
+    profile.max_xp = expected_max_xp
+    changed_fields.add('max_xp')
+
+  while profile.max_xp > 0 and profile.xp >= profile.max_xp:
+    profile.xp -= profile.max_xp
+    profile.level += 1
+    profile.max_xp = profile.calculate_xp_for_lvl()
+    if profile.level > profile.highest_level_ever:
+      profile.highest_level_ever = profile.level
+      changed_fields.add('highest_level_ever')
+    changed_fields.update({'xp', 'level', 'max_xp'})
+
+  if changed_fields:
+    profile.save(update_fields=list(changed_fields))
   
   if request.method == 'POST':
     data = json.loads(request.body) if request.body else {}
@@ -611,7 +636,7 @@ def api_complete_task(request, task_id):
             temp_level = current_level
 
             while temp_xp > 0 and temp_level > 1:
-              xp_needed = ((temp_level -2) + (temp_level -1)) * 30 if temp_level > 1 else 30
+              xp_needed = ((temp_level - 2) + (temp_level - 1)) * 20 if temp_level > 1 else 20
               if temp_xp >= xp_needed:
                 temp_xp -= xp_needed
                 temp_level -= 1
@@ -621,9 +646,9 @@ def api_complete_task(request, task_id):
             
             profile.level = max(1, profile.level - levels_down)
             if profile.level < current_level:
-              xp_needed = ((profile.level -1) + profile.level) * 30 if profile.level > 1 else 30
+              xp_needed = ((profile.level - 1) + profile.level) * 20 if profile.level > 1 else 20
               profile.xp = max(0, xp_needed - temp_xp)
-              profile.max_xp = ((profile.level - 1) + profile.level) * 30 if profile.level > 1 else 30
+              profile.max_xp = ((profile.level - 1) + profile.level) * 20 if profile.level > 1 else 20
             else:
               profile.xp = 0
 

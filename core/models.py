@@ -44,12 +44,17 @@ class UserProfile(models.Model):
   
   def add_xp(self, amount):
     """Add xp and check for lvl up"""
-    self.xp += amount
+    self.xp = max(0, self.xp + amount)
+    leveled_up = False
     xp_needed = self.calculate_xp_for_lvl()
-    if self.xp >= xp_needed:
+    self.max_xp = xp_needed
+
+    # Handle multiple level-ups when large XP is awarded.
+    while self.xp >= xp_needed:
       self.level += 1
       self.xp -= xp_needed
-      self.max_xp = self.calculate_xp_for_lvl()
+      xp_needed = self.calculate_xp_for_lvl()
+      self.max_xp = xp_needed
 
       self.hp = self.max_hp
       self.coins += 10
@@ -58,11 +63,11 @@ class UserProfile(models.Model):
       if self.level > self.highest_level_ever:
         self.highest_level_ever = self.level
 
-      # Log level up
+      # Log each level up
       LevelLog.objects.create(user=self.user, level=self.level)
+      leveled_up = True
 
-      return True # Level up occurred
-    return False
+    return leveled_up
   
   def lose_health(self, amount):
     """Lose health, check for lvl loss"""
@@ -356,6 +361,7 @@ class SubjectColor(models.Model):
 
 class StudySession(models.Model):
   """Study sessions with subject and duration tracking"""
+  MAX_DURATION_MINUTES = 12 * 60
   user = models.ForeignKey(User, on_delete=models.CASCADE)
   subject = models.CharField(max_length=100)
   color = models.CharField(max_length=7, null=True, blank=True)
@@ -369,7 +375,10 @@ class StudySession(models.Model):
     if self.active:
       self.end_time = timezone.now()
       duration = self.end_time - self.start_time
-      self.duration_minutes = int(duration.total_seconds() / 60)
+      duration_minutes = int(duration.total_seconds() / 60)
+      # Guard against clock changes or forgotten sessions causing unrealistic totals.
+      duration_minutes = max(0, min(duration_minutes, self.MAX_DURATION_MINUTES))
+      self.duration_minutes = duration_minutes
       self.active = False
       self.save()
       return self.duration_minutes
